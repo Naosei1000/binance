@@ -7,7 +7,7 @@ from PIL import Image
 # ==============================================================================
 st.set_page_config(page_title="NEXUS", page_icon="💠", layout="centered")
 
-# INJEÇÃO DE CSS (DESIGN DE ELITE, LEVE PARA CELULAR E DESTAQUE NO VEREDITO)
+# INJEÇÃO DE CSS (DESIGN DE ELITE, LEVE PARA CELULAR E BARRA ESTILO GEMINI)
 st.markdown("""
 <style>
     /* Fundo Animado Leve (Otimizado para Celular) */
@@ -25,7 +25,6 @@ st.markdown("""
         100% { background-position: 0% 50%; }
     }
 
-    /* Esconder elementos inúteis do Streamlit */
     header {visibility: hidden;}
     footer {visibility: hidden;}
     [data-testid="StyledFullScreenButton"] {display: none;}
@@ -33,10 +32,10 @@ st.markdown("""
     /* Logo Animada do NEXUS */
     .nexus-logo {
         text-align: center;
-        font-size: 3.5rem;
+        font-size: 3.2rem;
         font-weight: 800;
-        letter-spacing: 15px;
-        margin-top: 0rem;
+        letter-spacing: 12px;
+        margin-top: -2rem;
         margin-bottom: 2rem;
         background: linear-gradient(to right, #4facfe 0%, #00f2fe 100%);
         -webkit-background-clip: text;
@@ -53,46 +52,97 @@ st.markdown("""
 
     /* Estilo das Mensagens (Fundo translúcido elegante) */
     [data-testid="stChatMessage"] {
-        background-color: rgba(15, 23, 42, 0.6) !important;
-        border: 1px solid rgba(0, 242, 254, 0.1) !important;
-        border-radius: 12px !important;
+        background-color: rgba(15, 23, 42, 0.7) !important;
+        border: 1px solid rgba(0, 242, 254, 0.15) !important;
+        border-radius: 16px !important;
         padding: 1.5rem !important;
         margin-bottom: 1.5rem !important;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(4px);
     }
 
     /* 🎯 DESTAQUE MÁXIMO PARA O VEREDITO FINAL 🎯 */
     [data-testid="stChatMessage"] h2 {
-        background: linear-gradient(90deg, rgba(0, 242, 254, 0.05) 0%, rgba(0, 242, 254, 0.2) 50%, rgba(0, 242, 254, 0.05) 100%);
-        border-top: 1px solid #00f2fe;
-        border-bottom: 1px solid #00f2fe;
-        padding: 12px;
+        background: transparent;
         text-align: center;
         text-transform: uppercase;
         letter-spacing: 2px;
         color: #ffffff;
+        font-size: 1.3rem;
+        margin-bottom: 5px;
+    }
+
+    /* 🚨 CAIXA DE DESTAQUE NEON PARA A "ORDEM" 🚨 */
+    [data-testid="stChatMessage"] h3 {
+        background: rgba(0, 242, 254, 0.1);
+        border-left: 5px solid #00f2fe;
+        border-right: 5px solid #00f2fe;
+        padding: 15px;
+        text-align: center;
         border-radius: 8px;
-        margin-top: 25px;
-        margin-bottom: 25px;
-        font-size: 1.4rem;
-        box-shadow: 0 0 15px rgba(0, 242, 254, 0.1);
+        font-size: 1.5rem !important;
+        color: #ffffff;
+        margin-top: 15px;
+        margin-bottom: 20px;
+        box-shadow: 0 0 20px rgba(0, 242, 254, 0.15);
     }
 
-    /* Linhas divisórias (---) mais discretas */
-    hr {
-        border-color: rgba(0, 242, 254, 0.2) !important;
+    /* ========================================================= */
+    /* BARRA DE INPUT ESTILO GEMINI (UNIFICADA E CONFORTÁVEL)  */
+    /* ========================================================= */
+    
+    div[data-testid="stPopover"] > button {
+        background-color: transparent !important;
+        border: none !important;
+        font-size: 1.5rem !important;
+        padding: 0 !important;
+        color: #a0aec0 !important;
+        box-shadow: none !important;
+        transition: color 0.3s ease;
+    }
+    div[data-testid="stPopover"] > button:hover {
+        color: #00f2fe !important;
     }
 
-    /* Botão de Envio */
+    div[data-testid="stTextInput"] div[data-baseweb="input"] {
+        background-color: rgba(15, 23, 42, 0.9) !important;
+        border: 1px solid rgba(0, 242, 254, 0.3) !important;
+        border-radius: 25px !important;
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+    div[data-testid="stTextInput"] div[data-baseweb="input"]:focus-within {
+        border-color: #00f2fe !important;
+        box-shadow: 0 0 10px rgba(0, 242, 254, 0.2) !important;
+    }
+
     .stButton > button {
-        background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%);
+        background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
         color: white;
-        border: 1px solid rgba(0, 242, 254, 0.3);
-        border-radius: 8px;
-        transition: all 0.3s ease;
-        height: 100%;
-        width: 100%;
-        font-weight: 600;
-        letter-spacing: 1px;
+        border: none !important;
+        border-radius: 50% !important; 
+        height: 45px !important;
+        width: 45px !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        box-shadow: 0 4px 10px rgba(0, 242, 254, 0.3) !important;
+        transition: transform 0.2s ease;
+    }
+    .stButton > button:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 15px rgba(0, 242, 254, 0.5) !important;
+    }
+    
+    /* Caixa de Confirmação de Anexo (Novo!) */
+    .anexo-preview {
+        background-color: rgba(0, 242, 254, 0.05);
+        border: 1px dashed rgba(0, 242, 254, 0.4);
+        border-radius: 10px;
+        padding: 10px;
+        margin-bottom: 10px;
+        text-align: center;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -149,15 +199,13 @@ Seja extremamente detalhista com os números que aparecem no gráfico.
 # ==============================================================================
 st.markdown('<div class="nexus-logo">NEXUS</div>', unsafe_allow_html=True)
 
-# 5. GERENCIAMENTO DE ESTADO DO CHAT (Com Avatares Customizados)
+# 5. GERENCIAMENTO DE ESTADO DO CHAT 
 # ==============================================================================
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Exibe o histórico de mensagens
 for message in st.session_state.messages:
     if message["role"] != "system":
-        # Avatares elegantes: Usuário (🧑‍💻) e Nexus (💠)
         icone_avatar = "🧑‍💻" if message["role"] == "user" else "💠"
         
         with st.chat_message(message["role"], avatar=icone_avatar):
@@ -167,26 +215,46 @@ for message in st.session_state.messages:
                 for i, img in enumerate(message["images"]):
                     cols[i].image(img, use_container_width=True)
 
-# 6. BARRA DE INPUT E ANEXO OTIMIZADA
+# 6. BARRA DE INPUT ESTILO GEMINI + PREVIEW DE FOTOS (NOVO!)
 # ==============================================================================
 st.write("") 
-col_anexo, col_texto, col_btn = st.columns([1, 8, 1.5], vertical_alignment="bottom")
 
-with col_anexo:
-    with st.popover("📎"):
-        st.markdown("**Imagens da Operação**")
-        uploaded_files = st.file_uploader(
-            "Selecione", 
-            type=["png", "jpg", "jpeg"], 
-            accept_multiple_files=True, 
-            label_visibility="collapsed"
-        )
+# ---> INÍCIO DA MELHORIA DO PREVIEW <---
+# Declaramos o uploader primeiro, de forma sutil
+with st.popover("🖼️"):
+    st.markdown("**Galeria Tática**")
+    uploaded_files = st.file_uploader(
+        "Selecione as imagens", 
+        type=["png", "jpg", "jpeg"], 
+        accept_multiple_files=True, 
+        label_visibility="collapsed"
+    )
+
+# Se houver fotos carregadas, mostra um painel elegante de confirmação ANTES de enviar
+if uploaded_files:
+    st.markdown(f"""
+    <div class='anexo-preview'>
+        ✨ <b>{len(uploaded_files)} gráfico(s) anexado(s) com sucesso.</b> O Nexus está pronto para leitura tática. ⚡
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Mostra as miniaturas das imagens em colunas pequenas
+    cols_preview = st.columns(len(uploaded_files))
+    for i, file in enumerate(uploaded_files):
+        with cols_preview[i]:
+            # Abre uma miniatura temporária só para o visual
+            img_preview = Image.open(file)
+            st.image(img_preview, use_container_width=True)
+# ---> FIM DA MELHORIA DO PREVIEW <---
+
+# Barra de digitação e botão de envio
+col_texto, col_btn = st.columns([8.5, 1.5], gap="small", vertical_alignment="bottom")
 
 with col_texto:
-    prompt = st.text_input("", placeholder="Solicitar análise tática ao Nexus...", label_visibility="collapsed")
+    prompt = st.text_input("", placeholder="Envie uma mensagem ou confirme a análise... 🚀", label_visibility="collapsed")
 
 with col_btn:
-    enviar = st.button("ANALISAR")
+    enviar = st.button("⬆️")
 
 
 # 7. PROCESSAMENTO PRINCIPAL (MOTOR INTACTO)
@@ -196,9 +264,8 @@ if enviar and prompt:
     if uploaded_files:
         imagens_pil = [Image.open(f) for f in uploaded_files]
 
-    # Painel do Usuário
     with st.chat_message("user", avatar="🧑‍💻"):
-        st.markdown(f"**Parâmetros de Entrada:** {prompt}")
+        st.markdown(f"**Comando de Entrada:** {prompt}")
         if imagens_pil:
             cols = st.columns(len(imagens_pil))
             for i, img in enumerate(imagens_pil):
@@ -210,14 +277,13 @@ if enviar and prompt:
         "images": imagens_pil
     })
 
-    # Painel do Nexus
     with st.chat_message("assistant", avatar="💠"):
-        with st.spinner("NEXUS executando cálculos de probabilidade..."):
+        with st.spinner("NEXUS calculando probabilidade de alvos... ⏳"):
             try:
                 final_prompt = prompt
                 
                 if uploaded_files:
-                    st.toast("Óptica Ativada: Escaneando estrutura gráfica...", icon="💠")
+                    st.toast("Lendo estrutura dos gráficos... 👁️", icon="💠")
                     vision_model = genai.GenerativeModel('models/gemini-2.5-flash', system_instruction=instrucao_olhos)
                     vision_response = vision_model.generate_content(["Extraia os dados técnicos destes gráficos.", *imagens_pil])
                     dados_visuais = vision_response.text
@@ -239,20 +305,18 @@ if enviar and prompt:
 
                 resposta_nexus = completion.choices[0].message.content
                 
-                # Exibe o relatório de forma organizada com o CSS aplicado
                 st.markdown(resposta_nexus)
                 
-                # Sistema de Alertas Visuais extra no Streamlit
                 if "🟢" in resposta_nexus or "COMPRA" in resposta_nexus.upper():
-                    st.success("✅ SINAL CONFIRMADO: PREPARE-SE PARA EXECUÇÃO DE COMPRA")
+                    st.success("✅ SINAL CONFIRMADO: PREPARE-SE PARA COMPRA 📈")
                 elif "🔴" in resposta_nexus or "VENDA" in resposta_nexus.upper():
-                    st.error("🚨 SINAL CONFIRMADO: PREPARE-SE PARA EXECUÇÃO DE VENDA")
+                    st.error("🚨 SINAL CONFIRMADO: PREPARE-SE PARA VENDA 📉")
                 elif "🟡" in resposta_nexus or "AGUARDAR" in resposta_nexus.upper():
-                    st.warning("⚠️ EXECUÇÃO ABORTADA: PERMANEÇA POSICIONADO E AGUARDE")
+                    st.warning("⚠️ EXECUÇÃO ABORTADA: AGUARDE O MERCADO ✋")
 
                 st.session_state.messages.append({"role": "assistant", "content": resposta_nexus})
 
             except Exception as e:
-                st.error(f"Falha de processamento tático: {e}")
+                st.error(f"Falha de processamento tático: {e} 💥")
                 
     st.rerun()
