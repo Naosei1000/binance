@@ -1,8 +1,0 @@
-firebase-admin==7.3.0
-groq==1.1.2
-pandas==3.0.2
-Pillow==11.0.0
-protobuf==5.28.0
-streamlit==1.38.0
-yfinance==0.2.43
-google-generativeai
