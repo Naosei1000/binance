@@ -191,15 +191,21 @@ def traduzir_nome_visual_para_ticker(nome_visual):
 # ==============================================================================
 # 5. MÓDULO HFT DA BINANCE (NOVA INTEGRAÇÃO) E O CÉREBRO MATEMÁTICO
 # ==============================================================================
+
+# ---> NOVA FUNÇÃO DETETIVE INSERIDA AQUI <---
 def puxar_grafico_binance(simbolo="BTCUSDT", intervalo="5m", limite=100):
-    """Puxa o histórico de velas completo da Binance via API Pública"""
     url = "https://api.binance.com/api/v3/klines"
     parametros = {"symbol": simbolo, "interval": intervalo, "limit": limite}
     
     try:
         resposta = requests.get(url, params=parametros, timeout=5)
-        dados = resposta.json()
         
+        # Verifica se a Binance rejeitou o pedido (ex: moeda não existe ou IP bloqueado)
+        if resposta.status_code != 200:
+            st.error(f"Erro API Binance: Código {resposta.status_code} - Detalhe: {resposta.text}") 
+            return pd.DataFrame()
+            
+        dados = resposta.json()
         colunas = ['Tempo_Abertura', 'Open', 'High', 'Low', 'Close', 'Volume_Cripto',
                    'Tempo_Fechamento', 'Volume_Financeiro', 'Numero_Trades',
                    'Compra_Agressiva_Cripto', 'Compra_Agressiva_Financeiro', 'Ignorar']
@@ -210,7 +216,10 @@ def puxar_grafico_binance(simbolo="BTCUSDT", intervalo="5m", limite=100):
         
         return df[['Open', 'High', 'Low', 'Close', 'Volume_Financeiro']]
     except Exception as e:
+        # Se a biblioteca requests falhar ou a internet cair, avisa aqui:
+        st.error(f"Erro Técnico no Nexus (Requests falhou): {e}")
         return pd.DataFrame()
+# ----------------------------------------------
 
 def processar_timeframe(df, usa_volume_binance=False):
     """Processa dados de OHLCV de forma segura usando NumPy. Agora com Sweep Avançado."""
