@@ -70,6 +70,7 @@ st.markdown("""
     }
     .stToggle { margin-bottom: 1rem; }
     
+    /* Barra de progresso do cronômetro mais visível */
     .stProgress > div > div > div > div {
         background-color: #00ff88;
     }
@@ -77,10 +78,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# SESSÃO DO USUÁRIO (Isola os dados do Kill Switch por navegador)
+# SESSÃO DO USUÁRIO E VARIÁVEIS GLOBAIS
 # ==============================================================================
 if "user_id" not in st.session_state:
-    st.session_state.user_id = str(uuid.uuid4())
+    st.session_state.user_id = str(uuid.uuid4()) # Isolamento por aba/usuário
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "last_op_id" not in st.session_state:
@@ -113,7 +114,7 @@ except Exception as e:
 # ==============================================================================
 # 3. AUTO-ATUALIZAÇÃO QUÂNTICA (MACRO, SAZONALIDADE 5 ANOS, ATR E NOTÍCIAS)
 # ==============================================================================
-@st.cache_data(ttl=43200, show_spinner=False) 
+@st.cache_data(ttl=43200) 
 def atualizar_memoria_nexus_background():
     try:
         moedas_macro = ["BTC-USD", "ETH-USD", "EURUSD=X", "GC=F", "^AXJO"] 
@@ -160,15 +161,14 @@ def atualizar_memoria_nexus_background():
     except Exception as e:
         return False
 
-# Executa silenciosamente
-with st.spinner("Sincronizando Macroeconomia..."):
-    atualizar_memoria_nexus_background()
+atualizar_memoria_nexus_background()
 
 # ==============================================================================
 # 4. FUNÇÕES DE APRENDIZADO, SEGURANÇA E CRONÔMETRO DIÁRIO
 # ==============================================================================
 
 def exibir_cronometro_cota_diaria(mensagem_erro):
+    """Exibe um cronômetro visual em JavaScript até a meia-noite UTC (Reset de Cota)"""
     agora = datetime.now(timezone.utc)
     amanha = agora + timedelta(days=1)
     meia_noite = datetime(amanha.year, amanha.month, amanha.day, tzinfo=timezone.utc)
@@ -206,9 +206,8 @@ def exibir_cronometro_cota_diaria(mensagem_erro):
 
 def buscar_performance_nexus(ativo):
     try:
-        # Puxa apenas os resultados DO USUÁRIO atual para evitar conflito global
+        # Consulta amarrada ao ID do usuário
         docs = db.collection("resultados_nexus").where("ativo", "==", ativo).where("user_id", "==", st.session_state.user_id).order_by("timestamp", direction=firestore.Query.DESCENDING).limit(10).get()
-        
         if not docs: 
             return {"texto": "Sem histórico de operações recente.", "loss_sequence": 0, "wins": 0}
         
@@ -222,15 +221,15 @@ def buscar_performance_nexus(ativo):
             if r == "LOSS": loss_seq += 1
             else: break
             
-        return {"texto": f"Suas últimas {total} ops: {wins} WINs (Taxa: {taxa:.0f}%).", "loss_sequence": loss_seq, "wins": wins}
+        return {"texto": f"Últimas {total} ops: {wins} WINs (Taxa: {taxa:.0f}%).", "loss_sequence": loss_seq, "wins": wins}
     except Exception as e:
-        return {"texto": "Erro ao carregar memória pessoal.", "loss_sequence": 0, "wins": 0}
+        return {"texto": "Erro ao carregar memória.", "loss_sequence": 0, "wins": 0}
 
 def salvar_resultado(id_op, ativo, resultado):
     db.collection("resultados_nexus").document(id_op).set({
         "ativo": ativo, 
         "resultado": resultado, 
-        "user_id": st.session_state.user_id, # Amarração do usuário
+        "user_id": st.session_state.user_id, # Registra quem fez a operação
         "timestamp": firestore.SERVER_TIMESTAMP
     })
 
@@ -244,7 +243,7 @@ def traduzir_nome_visual_para_ticker(nome_visual):
     return "BTC-USD"
 
 # ==============================================================================
-# 5. MÓDULO ALGORÍTMICO E O CÉREBRO MATEMÁTICO
+# 5. MÓDULO HFT DA BINANCE E O CÉREBRO MATEMÁTICO
 # ==============================================================================
 def puxar_grafico_binance(simbolo="BTCUSDT", intervalo="5m", limite=100):
     url = "https://api.binance.us/api/v3/klines"
@@ -254,6 +253,7 @@ def puxar_grafico_binance(simbolo="BTCUSDT", intervalo="5m", limite=100):
         resposta = requests.get(url, params=parametros, timeout=5)
         
         if resposta.status_code != 200:
+            st.error(f"Erro API Binance: Código {resposta.status_code} - Detalhe: {resposta.text}") 
             return pd.DataFrame()
             
         dados = resposta.json()
@@ -267,6 +267,7 @@ def puxar_grafico_binance(simbolo="BTCUSDT", intervalo="5m", limite=100):
         
         return df[['Open', 'High', 'Low', 'Close', 'Volume_Financeiro']]
     except Exception as e:
+        st.error(f"Erro Técnico no Nexus (Requests falhou): {e}")
         return pd.DataFrame()
 
 def processar_timeframe(df, usa_volume_binance=False):
@@ -275,7 +276,7 @@ def processar_timeframe(df, usa_volume_binance=False):
     h = df['High'].to_numpy()
     l = df['Low'].to_numpy()
 
-    # Prevenção contra Arrays curtos (Segurança Matemática)
+    # TRAVA DE SEGURANÇA MATEMÁTICA
     if len(c) < 21:
         preco_atual = float(c[-1]) if len(c) > 0 else 0
         return preco_atual, 50.0, "NEUTRA (Falta de Dados)", "NÃO", "NÃO"
@@ -293,6 +294,7 @@ def processar_timeframe(df, usa_volume_binance=False):
 
     ema_9_atual = np.mean(c[-9:])
     ema_21_atual = np.mean(c[-21:])
+
     preco_atual = float(c[-1])
     tendencia = "ALTA" if ema_9_atual > ema_21_atual else "BAIXA"
 
@@ -342,7 +344,7 @@ def ler_dados_mercado_ao_vivo_multi_tf(ticker):
             _, rsi_h1, t_h1, _, _ = processar_timeframe(df_h1, usa_volume_binance=True)
             _, rsi_d1, t_d1, _, _ = processar_timeframe(df_d1, usa_volume_binance=True)
             
-            origem_dados = "BINANCE API"
+            origem_dados = "BINANCE API (HFT)"
 
         else:
             ativo = yf.Ticker(ticker)
@@ -381,9 +383,10 @@ def ler_dados_mercado_ao_vivo_multi_tf(ticker):
         return "FALHA_DE_DADOS"
 
 # ==============================================================================
-# 5.5 HUB DE CORRETORAS E GRÁFICO AO VIVO CENTRAL
+# 5.5 HUB DE CORRETORAS E GRÁFICO AO VIVO CENTRAL (SEMPRE VISÍVEL)
 # ==============================================================================
 st.markdown('<div class="nexus-logo">NEXUS <span>QUANTUM</span></div>', unsafe_allow_html=True)
+
 st.markdown("### 📡 RADAR DE OPERAÇÕES E CORRETORA")
 
 col_ativo, col_corretora = st.columns(2)
@@ -424,87 +427,109 @@ st.markdown("---")
 # ==============================================================================
 
 auto_mode = st.toggle("🟢 ATIVAR PILOTO AUTOMÁTICO (VARREDURA MULTI-TIMEFRAME CONSTANTE)")
+container_log = st.empty()
 
 if auto_mode:
-    # --- MODO 1: O ROBÔ LÊ O MERCADO SOZINHO VIA DADOS ---
+    # --- MODO 1: O ROBÔ LÊ O MERCADO SOZINHO VIA DADOS (HFT MULTI-TIMEFRAME) ---
     tempo_agora = time.time()
     
     if tempo_agora >= st.session_state.next_auto_run:
-        # HORA DE EXECUTAR A IA
-        st.warning("📡 PROCESSANDO LEITURA DO MERCADO...")
-        
-        ativo_para_ler = "BTC-USD" if "BTC" in ativo_live else "ETH-USD"
-        if "EUR" in ativo_live: ativo_para_ler = "EURUSD=X"
-        if "XAU" in ativo_live: ativo_para_ler = "GC=F"
-        
-        fuso_br = timezone(timedelta(hours=-3))
-        hora_atual = datetime.now(fuso_br).strftime('%H:%M:%S')
+        with container_log.container():
+            st.warning("📡 SCANNER ATIVADO: Puxando histórico Multi-Timeframe da corretora...")
+            
+            ativo_para_ler = "BTC-USD" if "BTC" in ativo_live else "ETH-USD"
+            if "EUR" in ativo_live: ativo_para_ler = "EURUSD=X"
+            if "XAU" in ativo_live: ativo_para_ler = "GC=F"
+            
+            fuso_br = timezone(timedelta(hours=-3))
+            hora_atual = datetime.now(fuso_br).strftime('%H:%M:%S')
 
-        dados_matematicos = ler_dados_mercado_ao_vivo_multi_tf(ativo_para_ler)
-        perf = buscar_performance_nexus(ativo_para_ler)
-        
-        if perf["loss_sequence"] >= 5:
-            st.error("🚨 KILL SWITCH ATIVADO: 5 Perdas Seguidas na sua conta. Piloto Automático Desligado por segurança.")
-            st.stop()
+            dados_matematicos = ler_dados_mercado_ao_vivo_multi_tf(ativo_para_ler)
+            perf = buscar_performance_nexus(ativo_para_ler)
             
-        if "FALHA_DE_DADOS" in dados_matematicos:
-             st.error("⚠️ O servidor limitou as requisições. O Nexus aguardará o próximo ciclo para tentar novamente.")
-        else:
-            doc = db.collection("historico_macro").document(f"{ativo_para_ler}_{datetime.now().strftime('%Y-%m-%d')}").get()
-            macro_info = doc.to_dict() if doc.exists else "Macro Indisponível"
-            
-            inst_auto = """
-            Você é o Algoritmo Nexus de Scalping e Day Trade Algorítmico. 
-            Sua resposta deve ser MILITAR, EXTREMAMENTE CURTA E DIRETA. Sem explicações longas.
-            
-            REGRAS DE SINAL:
-            1. Só recomende COMPRA se H1 e M30 estiverem em ALTA, e o M5 tiver RSI baixo ou Sweep.
-            2. Só recomende VENDA se H1 e M30 estiverem em BAIXA, e o M5 tiver RSI alto ou Sweep.
-            3. Se não houver alinhamento H1/M30/M5, a ordem é AGUARDAR.
-            4. Se o Sweep relatar "ALTA LIQUIDEZ / ABSORÇÃO", dê extrema importância a este sinal.
+            if perf["loss_sequence"] >= 5:
+                st.error("🚨 KILL SWITCH ATIVADO: 5 Perdas Seguidas. Piloto Automático Desligado.")
+                st.stop()
+                
+            if "FALHA_DE_DADOS" in dados_matematicos:
+                 st.error("⚠️ O servidor limitou as requisições (Anti-Spam). O Nexus aguardará o próximo ciclo para tentar novamente.")
+            else:
+                doc = db.collection("historico_macro").document(f"{ativo_para_ler}_{datetime.now().strftime('%Y-%m-%d')}").get()
+                macro_info = doc.to_dict() if doc.exists else "Macro Indisponível"
+                
+                # NOVO CONTEXTO DA IA: Scalping
+                inst_auto = """
+                Você é o Algoritmo Nexus de Scalping e Day Trade Algorítmico. 
+                Sua resposta deve ser MILITAR, EXTREMAMENTE CURTA E DIRETA. Sem explicações longas.
+                
+                REGRAS DE SINAL:
+                1. Só recomende COMPRA se H1 e M30 estiverem em ALTA, e o M5 tiver RSI baixo ou Sweep.
+                2. Só recomende VENDA se H1 e M30 estiverem em BAIXA, e o M5 tiver RSI alto ou Sweep.
+                3. Se não houver alinhamento H1/M30/M5, a ordem é AGUARDAR.
+                4. Se o Sweep relatar "ALTA LIQUIDEZ / ABSORÇÃO", dê extrema importância a este sinal.
 
-            FORMATO OBRIGATÓRIO (NÃO USE TEXTO GRANDE, USE APENAS ### PARA O TÍTULO PRINCIPAL):
-            
-            ### [🟢 COMPRA / 🔴 VENDA / 🟡 AGUARDAR]
-            **Nota:** [0/10] | **Horário:** [Horário atual]
-            **Alvo:** [Preço] | **Stop Loss:** [Preço] | **DCA:** [Preço]
-            
-            *Ação Tática:* [Máximo 15 palavras justificando a ação baseada no cruzamento de tempos]
-            """
-            
-            prompt_final = f"DADOS:\n{dados_matematicos}\nMACRO:\n{macro_info}\nPERF:\n{perf['texto']}\nHORARIO ATUAL: {hora_atual}"
-            
-            try:
-                resposta = groq_client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[{"role": "system", "content": inst_auto}, {"role": "user", "content": prompt_final}],
-                    temperature=0.1, max_tokens=256
-                ).choices[0].message.content
+                FORMATO OBRIGATÓRIO (NÃO USE TEXTO GRANDE, USE APENAS ### PARA O TÍTULO PRINCIPAL):
                 
-                st.markdown(resposta)
-                st.session_state.last_op_id = str(uuid.uuid4())
-                st.session_state.last_ativo = ativo_para_ler
+                ### [🟢 COMPRA / 🔴 VENDA / 🟡 AGUARDAR]
+                **Nota:** [0/10] | **Horário:** [Horário atual]
+                **Alvo:** [Preço] | **Stop Loss:** [Preço] | **DCA:** [Preço]
                 
-            except Exception as e:
-                erro_str = str(e)
-                if "429" in erro_str or "Quota exceeded" in erro_str:
-                    st.warning("⚠️ Limite por minuto da API atingido. O sistema aguardará a próxima janela.")
-                else:
-                    st.error(f"Erro no Processador Quântico IA: {e}")
+                *Ação Tática:* [Máximo 15 palavras justificando a ação baseada no cruzamento de tempos]
+                """
+                
+                prompt_final = f"DADOS:\n{dados_matematicos}\nMACRO:\n{macro_info}\nPERF:\n{perf['texto']}\nHORARIO ATUAL: {hora_atual}"
+                
+                try:
+                    resposta = groq_client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=[{"role": "system", "content": inst_auto}, {"role": "user", "content": prompt_final}],
+                        temperature=0.1, max_tokens=256
+                    ).choices[0].message.content
                     
-        # Define o próximo ciclo para daqui a 60 segundos
-        st.session_state.next_auto_run = time.time() + 60
-        st.rerun()
-        
+                    st.markdown(resposta)
+                    st.session_state.last_op_id = str(uuid.uuid4())
+                    st.session_state.last_ativo = ativo_para_ler
+                    
+                    # Define próxima execução
+                    st.session_state.next_auto_run = time.time() + 60
+                    st.rerun()
+                    
+                except Exception as e:
+                    erro_str = str(e)
+                    # VERIFICAÇÃO INTELIGENTE DE COTA NO MODO AUTOMÁTICO ORIGINAL
+                    if "429" in erro_str or "Quota exceeded" in erro_str:
+                        delay_match = re.search(r'retry_delay\s*\{\s*seconds:\s*(\d+)\s*\}', erro_str)
+                        wait_seconds = int(delay_match.group(1)) if delay_match else None
+                        
+                        if wait_seconds and wait_seconds < 300: # Cota de Minuto
+                            st.warning(f"⚠️ Limite por minuto da IA atingido. Resfriando por {wait_seconds}s...")
+                            cooldown_ph = st.empty()
+                            cbar = st.progress(0.0)
+                            for sec in range(wait_seconds, 0, -1):
+                                cooldown_ph.info(f"⏳ Recarregando API para evitar sobrecarga: **{sec}s**")
+                                cbar.progress((wait_seconds - sec) / wait_seconds)
+                                time.sleep(1)
+                            cooldown_ph.empty()
+                            cbar.empty()
+                            st.rerun()
+                        else: # Cota Diária
+                            exibir_cronometro_cota_diaria("🚨 COTA DIÁRIA DO PILOTO AUTOMÁTICO ESGOTADA! Você usou todos os créditos para hoje.")
+                    else:
+                        st.error(f"Erro no Processador Quântico IA: {e}")
+                        st.stop()
+                        
     else:
-        # Timer Assíncrono (Não bloqueia totalmente a UI)
+        # NOVO LOOP DESBLOQUEADO MANTENDO SUAS MENSAGENS VISUAIS
+        st.markdown("---")
         segundos_restantes = int(st.session_state.next_auto_run - tempo_agora)
         progresso = max(0.0, min(1.0, (60 - segundos_restantes) / 60.0))
         
-        st.info(f"⏳ Aguardando fechamento da vela. Próxima leitura do algoritmo em: **{segundos_restantes} segundos**")
-        st.progress(progresso)
+        status_text = st.empty()
+        progress_bar = st.progress(0.0)
         
-        # Dorme 1 segundo e recarrega. Assim o usuário ainda consegue clicar no botão de desativar!
+        status_text.info(f"⏳ Aguardando fechamento da vela. Próxima leitura em: **{segundos_restantes} segundos**")
+        progress_bar.progress(progresso)
+        
         time.sleep(1)
         st.rerun()
 
@@ -534,10 +559,11 @@ else:
         dias_da_semana = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
         dia_hoje_str = dias_da_semana[agora.weekday()]
         
+        # OTIMIZAÇÃO APLICADA AQUI: Reduzindo o peso do print para não estourar a cota do Gemini!
         imagens_pil = []
         for f in uploaded_files:
             img = Image.open(f)
-            img.thumbnail((1024, 1024))
+            img.thumbnail((1024, 1024)) # Compressor Quântico: diminui a resolução da imagem enviada
             imagens_pil.append(img)
 
         with st.chat_message("user", avatar="🧑‍💻"):
@@ -564,7 +590,7 @@ else:
                     performance_nexus = buscar_performance_nexus(ticker_alvo)
                     
                     if performance_nexus["loss_sequence"] >= 5:
-                        st.error(f"🚨 PROTOCOLO DE DEFESA ATIVADO: 5 perdas seguidas em {ativo_identificado_na_tela}. Bloqueio de 24h na sua conta.")
+                        st.error(f"🚨 PROTOCOLO DE DEFESA ATIVADO: 5 perdas seguidas em {ativo_identificado_na_tela}. Bloqueio de 24h.")
                         st.stop()
 
                     data_hoje = agora.strftime('%Y-%m-%d')
@@ -578,6 +604,7 @@ else:
                         dados_macro_str = "Sem dados quantitativos hoje."
                         noticias_hoje = "Sentimento atual cego."
 
+                    # NOVO CONTEXTO DA IA: Scalping
                     instrucao_nexus_manual = """
                     Você é o NEXUS QUANTUM VANGUARD (Sistema de Scalping Algorítmico).
                     FORMATO MILITAR DIRETO (NÃO USE TEXTO GIGANTE, USE APENAS ### NO TÍTULO):
@@ -608,8 +635,24 @@ else:
 
                 except Exception as e:
                     erro_str = str(e)
+                    # VERIFICAÇÃO INTELIGENTE DE COTA NO MODO MANUAL ORIGINAL MANTIDA
                     if "429" in erro_str or "Quota exceeded" in erro_str:
-                        st.warning("⚠️ Limites de uso atingidos. Aguarde alguns instantes e tente novamente.")
+                        delay_match = re.search(r'retry_delay\s*\{\s*seconds:\s*(\d+)\s*\}', erro_str)
+                        wait_seconds = int(delay_match.group(1)) if delay_match else None
+                        
+                        if wait_seconds and wait_seconds < 300: # Cota de Minuto (Resfriamento curto)
+                            st.warning(f"⚠️ Limite de imagens por minuto atingido. Ativando protocolo de resfriamento ({wait_seconds}s)...")
+                            cooldown_ph = st.empty()
+                            cbar = st.progress(0.0)
+                            for sec in range(wait_seconds, 0, -1):
+                                cooldown_ph.info(f"⏳ Recarregando conexão com o servidor. Liberação em: **{sec} segundos**")
+                                cbar.progress((wait_seconds - sec) / wait_seconds)
+                                time.sleep(1)
+                            cooldown_ph.success("✅ Cota recarregada! O sistema tentará processar a imagem novamente no próximo clique.")
+                            cbar.empty()
+                            st.rerun()
+                        else: # Cota Diária
+                            exibir_cronometro_cota_diaria("🚨 COTA DIÁRIA VISUAL (GEMINI) ESGOTADA! Você usou todos os créditos gratuitos para hoje.")
                     else:
                         st.error(f"🚨 ALERTA DO SISTEMA: {e}")
                         st.stop()
@@ -632,12 +675,12 @@ if st.session_state.last_op_id:
             salvar_resultado(st.session_state.last_op_id, st.session_state.last_ativo, "WIN")
             st.toast("✅ Excelente! Parâmetros da vitória arquivados.", icon="🟢")
             st.session_state.last_op_id = None
-            time.sleep(1)
+            time.sleep(2)
             st.rerun()
     with col2:
         if st.button("🔴 DEU LOSS", key="btn_loss"):
             salvar_resultado(st.session_state.last_op_id, st.session_state.last_ativo, "LOSS")
             st.toast("❌ Registro confirmado.", icon="🔴")
             st.session_state.last_op_id = None
-            time.sleep(1)
+            time.sleep(2)
             st.rerun()
