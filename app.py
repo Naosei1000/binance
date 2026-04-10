@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import firebase_admin
 from firebase_admin import credentials, firestore
 import yfinance as yf
-import streamlit.components.v1 as components
+import streamlit.components.v1 as components  
 import re
 import uuid
 import pandas as pd
@@ -155,7 +155,7 @@ def buscar_performance_nexus(ativo):
     try:
         docs = db.collection("resultados_nexus").where("ativo", "==", ativo).order_by("timestamp", direction=firestore.Query.DESCENDING).limit(10).get()
         if not docs: 
-            return {"texto": "Sem histórico de operações recentes para este ativo.", "loss_sequence": 0, "wins": 0}
+            return {"texto": "Sem histórico de operações.", "loss_sequence": 0, "wins": 0}
         
         resultados = [d.to_dict().get("resultado") for d in docs]
         wins = resultados.count("WIN")
@@ -167,9 +167,9 @@ def buscar_performance_nexus(ativo):
             if r == "LOSS": loss_seq += 1
             else: break
             
-        return {"texto": f"Nas últimas {total} operações de {ativo}, você teve {wins} WINs. (Taxa de acerto: {taxa:.0f}%).", "loss_sequence": loss_seq, "wins": wins}
+        return {"texto": f"Últimas {total} ops: {wins} WINs (Taxa: {taxa:.0f}%).", "loss_sequence": loss_seq, "wins": wins}
     except Exception as e:
-        return {"texto": "Erro ao carregar memória de performance.", "loss_sequence": 0, "wins": 0}
+        return {"texto": "Erro ao carregar memória.", "loss_sequence": 0, "wins": 0}
 
 def salvar_resultado(id_op, ativo, resultado):
     db.collection("resultados_nexus").document(id_op).set({
@@ -188,33 +188,27 @@ def traduzir_nome_visual_para_ticker(nome_visual):
     return "BTC-USD"
 
 # ==============================================================================
-# 5. O CÉREBRO MATEMÁTICO MULTI-TIMEFRAME
+# 5. O CÉREBRO MATEMÁTICO MULTI-TIMEFRAME (ANTI-BLOQUEIO YFINANCE)
 # ==============================================================================
 def processar_timeframe(df):
-    """Processa dados de OHLCV de forma segura usando NumPy para evitar erros do Pandas."""
+    """Processa dados de OHLCV de forma segura usando NumPy"""
     c = df['Close'].to_numpy()
     o = df['Open'].to_numpy()
     h = df['High'].to_numpy()
     l = df['Low'].to_numpy()
 
-    # Cálculo de RSI simplificado e seguro com NumPy
+    # RSI Seguro
     delta = np.diff(c)
     gain = np.where(delta > 0, delta, 0)
     loss = np.where(delta < 0, -delta, 0)
     
-    # Usando janela simples (SMA) para RSI se não tiver dados suficientes
     if len(gain) > 14:
         avg_gain = np.convolve(gain, np.ones(14)/14, mode='valid')[-1]
         avg_loss = np.convolve(loss, np.ones(14)/14, mode='valid')[-1]
-        if avg_loss == 0:
-            rsi_atual = 100.0
-        else:
-            rs = avg_gain / avg_loss
-            rsi_atual = 100 - (100 / (1 + rs))
+        rsi_atual = 100 - (100 / (1 + (avg_gain / avg_loss))) if avg_loss != 0 else 100.0
     else:
         rsi_atual = 50.0
 
-    # EMA Simplificada (usando apenas SMA para as últimas velas para estabilidade extrema)
     ema_9_atual = np.mean(c[-9:]) if len(c) >= 9 else c[-1]
     ema_21_atual = np.mean(c[-21:]) if len(c) >= 21 else c[-1]
 
@@ -231,14 +225,19 @@ def processar_timeframe(df):
     return preco_atual, rsi_atual, tendencia, sweep_alta, sweep_baixa
 
 def ler_dados_mercado_ao_vivo_multi_tf(ticker):
+    """
+    Lê M5, M30, H1 e D1 usando método 'history' (Anti-Spam do Yahoo Finance)
+    """
     try:
-        df_m5 = yf.download(ticker, period="5d", interval="5m", progress=False)
-        df_m30 = yf.download(ticker, period="1mo", interval="30m", progress=False)
-        df_h1 = yf.download(ticker, period="1mo", interval="1h", progress=False)
-        df_d1 = yf.download(ticker, period="3mo", interval="1d", progress=False)
+        ativo = yf.Ticker(ticker)
+        # Reduzindo o período para não ser bloqueado por excesso de dados
+        df_m5 = ativo.history(period="3d", interval="5m")
+        df_m30 = ativo.history(period="10d", interval="30m")
+        df_h1 = ativo.history(period="20d", interval="1h")
+        df_d1 = ativo.history(period="2mo", interval="1d")
 
         if df_m5.empty or df_m30.empty or df_h1.empty or df_d1.empty: 
-            return "FALHA DE LEITURA (SEM DADOS)"
+            return "FALHA_DE_DADOS"
 
         p_m5, rsi_m5, t_m5, sa_m5, sb_m5 = processar_timeframe(df_m5)
         _, rsi_m30, t_m30, _, _ = processar_timeframe(df_m30)
@@ -246,25 +245,34 @@ def ler_dados_mercado_ao_vivo_multi_tf(ticker):
         _, rsi_d1, t_d1, _, _ = processar_timeframe(df_d1)
 
         resumo_dados = f"""
-        * STATUS (D1/H1/M30/M5):
-        Preço Atual: {p_m5:.4f}
-        T_D1: {t_d1} (RSI {rsi_d1:.1f})
-        T_H1: {t_h1} (RSI {rsi_h1:.1f})
-        T_M30: {t_m30} (RSI {rsi_m30:.1f})
-        T_M5: {t_m5} (RSI {rsi_m5:.1f})
-        Sweep M5 (Baixa): {sb_m5}
-        Sweep M5 (Alta): {sa_m5}
+        * LEITURA MULTI-TIMEFRAME (D1, H1, M30, M5):
+        - Preço Atual: {p_m5:.4f}
+        
+        - TENDÊNCIA MACRO (D1): {t_d1} | RSI: {rsi_d1:.1f}
+        - TENDÊNCIA MÉDIA (H1): {t_h1} | RSI: {rsi_h1:.1f}
+        - TENDÊNCIA CURTA (M30): {t_m30} | RSI: {rsi_m30:.1f}
+        - TENDÊNCIA MICRO (M5): {t_m5} | RSI: {rsi_m5:.1f}
+        
+        - Manipulação Detectada no M5 (Sweep Baixa): {sb_m5}
+        - Manipulação Detectada no M5 (Sweep Alta): {sa_m5}
         """
         return resumo_dados
     except Exception as e:
-        return f"ERRO INTERNO HFT: {e}"
+        return "FALHA_DE_DADOS"
 
 # ==============================================================================
-# 5.5 GRÁFICO AO VIVO CENTRAL (SEMPRE VISÍVEL)
+# 5.5 GRÁFICO AO VIVO CENTRAL (SEMPRE VISÍVEL) E API DA CORRETORA
 # ==============================================================================
 st.markdown('<div class="nexus-logo">NEXUS <span>QUANTUM</span></div>', unsafe_allow_html=True)
 
-ativo_live = st.selectbox("🎯 ATIVO EM OPERAÇÃO:", ["BINANCE:BTCUSDT", "BINANCE:ETHUSDT", "FX:EURUSD", "OANDA:XAUUSD"])
+st.markdown("### 📡 RADAR DE OPERAÇÕES E CORRETORA")
+col_ativo, col_corretora = st.columns(2)
+with col_ativo:
+    ativo_live = st.selectbox("Ativo para Monitorar:", ["BINANCE:BTCUSDT", "BINANCE:ETHUSDT", "FX:EURUSD", "OANDA:XAUUSD"])
+with col_corretora:
+    corretora_selecionada = st.selectbox("Conectar Corretora Real (Via API):", ["Yahoo Finance (Gratuito - Padrão)", "Binance", "Bybit", "OKX"])
+
+api_key_input = st.text_input("Sua Chave API (Exigido apenas se usar Binance/Bybit/OKX)", type="password", placeholder="Insira a API Key da sua corretora...")
 
 simbolo_tv = ativo_live
 html_grafico = f"""
@@ -289,14 +297,18 @@ st.markdown("---")
 # ==============================================================================
 # 6. O PILOTO AUTOMÁTICO (LEITURA 24/7) E CHAT MANUAL
 # ==============================================================================
-if "messages" not in st.session_state: st.session_state.messages = []
-if "last_op_id" not in st.session_state: st.session_state.last_op_id = None
-if "last_ativo" not in st.session_state: st.session_state.last_ativo = None
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "last_op_id" not in st.session_state:
+    st.session_state.last_op_id = None
+if "last_ativo" not in st.session_state:
+    st.session_state.last_ativo = None
 
 auto_mode = st.toggle("🟢 ATIVAR PILOTO AUTOMÁTICO (VARREDURA MULTI-TIMEFRAME CONSTANTE)")
 container_log = st.empty()
 
 if auto_mode:
+    # --- MODO 1: O ROBÔ LÊ O MERCADO SOZINHO VIA DADOS (HFT MULTI-TIMEFRAME) ---
     with container_log.container():
         st.warning("📡 SCANNER ATIVADO: Processando D1, H1, M30 e M5...")
         
@@ -307,6 +319,7 @@ if auto_mode:
         fuso_br = timezone(timedelta(hours=-3))
         hora_atual = datetime.now(fuso_br).strftime('%H:%M:%S')
 
+        # TENTA LER OS DADOS COM SISTEMA ANTI-FALHA
         dados_matematicos = ler_dados_mercado_ao_vivo_multi_tf(ativo_para_ler)
         perf = buscar_performance_nexus(ativo_para_ler)
         
@@ -314,8 +327,8 @@ if auto_mode:
             st.error("🚨 KILL SWITCH ATIVADO: 5 Perdas Seguidas. Piloto Automático Desligado.")
             st.stop()
             
-        if "FALHA" in dados_matematicos or "ERRO" in dados_matematicos:
-             st.error("⚠️ Falha na obtenção de dados Multi-Timeframe. Tentando novamente no próximo ciclo.")
+        if "FALHA_DE_DADOS" in dados_matematicos:
+             st.error("⚠️ Servidor de dados rejeitou a conexão por excesso de requisições. O Nexus vai tentar novamente no próximo ciclo.")
         else:
             doc = db.collection("historico_macro").document(f"{ativo_para_ler}_{datetime.now().strftime('%Y-%m-%d')}").get()
             macro_info = doc.to_dict() if doc.exists else "Macro Indisponível"
@@ -324,27 +337,27 @@ if auto_mode:
             Você é um Algoritmo de Execução de Alta Frequência (HFT). 
             Sua resposta não deve ter explicações longas. Seja direto, militar e cirúrgico.
             
-            REGRAS DE SINAL:
-            1. Só recomende COMPRA se as tendências de H1 e M30 também estiverem em ALTA, e o M5 tiver RSI < 40 ou Sweep de Baixa.
-            2. Só recomende VENDA se as tendências de H1 e M30 estiverem em BAIXA, e o M5 tiver RSI > 60 ou Sweep de Alta.
+            REGRAS DE SINAL (CRUZAMENTO OBRIGATÓRIO):
+            1. Só recomende COMPRA se H1 e M30 também estiverem em ALTA, e o M5 tiver RSI < 40 ou Sweep de Baixa.
+            2. Só recomende VENDA se H1 e M30 estiverem em BAIXA, e o M5 tiver RSI > 60 ou Sweep de Alta.
             3. Se não houver alinhamento claro entre M5, M30 e H1, a ordem é estritamente AGUARDAR.
 
-            FORMATO EXATO DE SAÍDA OBRIGATÓRIO (USAR O MARKDOWN):
+            FORMATO EXATO DE SAÍDA OBRIGATÓRIO (USE MARKDOWN PARA DESTAQUE):
             
             # [🟢 COMPRA / 🔴 VENDA / 🟡 AGUARDAR]
             **🎯 NOTA DA CONFLUÊNCIA:** [0/10]
-            **⏰ HORÁRIO DA ANÁLISE:** [HORARIO AQUI]
-            **📌 TEMPO GRÁFICO:** Operar a [A Favor/Contra] da tendência de H1, no gatilho do M5.
+            **⏰ HORÁRIO DA ANÁLISE:** [Use o horário fornecido no prompt]
+            **📌 TEMPO GRÁFICO ALVO:** Operar no gatilho do M5 [A Favor/Contra] da tendência macro de H1.
             
             ---
-            **💰 ALVO:** [Preço exato de entrada + Cálculo 1:4]
-            **⛔ STOP LOSS:** [Preço atrás do sweep/fundo do M5]
-            **🔄 DCA (ZONA DE RECOMPRA):** [Preço de proteção]
+            **💰 ALVO EXATO:** [Preço de Entrada +/- Cálculo de alvo 1:4]
+            **⛔ STOP LOSS:** [Preço atrás do sweep ou suporte/resistência recente do M5]
+            **🔄 DCA (ZONA DE RECOMPRA):** [Preço de segurança para melhorar preço médio]
             ---
-            *Nota Breve:* [1 frase justificando a entrada ou o motivo de aguardar, citando o cruzamento de timeframes]
+            *Nota Tática:* [Apenas 1 frase justificando o motivo do sinal baseado nas tendências cruzadas]
             """
             
-            prompt_final = f"DADOS:\n{dados_matematicos}\nMACRO:\n{macro_info}\nPERF:\n{perf['texto']}\nHORARIO: {hora_atual}"
+            prompt_final = f"DADOS HFT:\n{dados_matematicos}\nMACRO:\n{macro_info}\nPERF:\n{perf['texto']}\nHORARIO ATUAL: {hora_atual}"
             
             try:
                 resposta = groq_client.chat.completions.create(
@@ -358,25 +371,25 @@ if auto_mode:
                 st.session_state.last_ativo = ativo_para_ler
                 
             except Exception as e:
-                st.error(f"Erro no Processador Quântico: {e}")
+                st.error(f"Erro no Processador Quântico IA: {e}")
             
+        # O CRONÔMETRO VISUAL 
         st.markdown("---")
         status_text = st.empty()
         progress_bar = st.progress(0.0)
         
-        # Loop do cronômetro
         for i in range(60, 0, -1):
-            status_text.info(f"⏳ **{i} segundos** restantes para a próxima varredura de mercado.")
+            status_text.info(f"⏳ Aguardando fechamento da vela. O robô lerá o mercado novamente em: **{i} segundos**")
             progress_bar.progress((60 - i) / 60)
             time.sleep(1)
             
         status_text.empty()
         progress_bar.empty()
-        # Chute forçado para garantir o rerun em todas as plataformas
+        # Comando para recarregar o loop infinito e iniciar nova leitura
         st.query_params.update(timestamp=str(time.time()))
 
 else:
-    # MODO MANUAL INTOCADO
+    # --- MODO 2: O MODO ORIGINAL (USUÁRIO MANDA O PRINT) ---
     for message in st.session_state.messages:
         if message["role"] != "system":
             icone_avatar = "🧑‍💻" if message["role"] == "user" else "💠"
