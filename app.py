@@ -7,13 +7,13 @@ from datetime import datetime, timedelta, timezone
 import firebase_admin
 from firebase_admin import credentials, firestore
 import yfinance as yf
-import streamlit.components.v1 as components
+import streamlit.components.v1 as components  
 import re
 import uuid
 import pandas as pd
 import random
 import numpy as np
-import requests
+import requests 
 
 # ==============================================================================
 # 1. CONFIGURAÇÃO VISUAL E LUXUOSA DO SITE (Foco Mobile)
@@ -98,7 +98,7 @@ except Exception as e:
     st.stop()
 
 # ==============================================================================
-# 3. AUTO-ATUALIZAÇÃO QUÂNTICA (MACRO, SAZONALIDADE 5 ANOS, ATR E NOTÍCIAS)
+# 3. AUTO-ATUALIZAÇÃO QUÂNTICA E ROTINAS
 # ==============================================================================
 @st.cache_data(ttl=43200) 
 def atualizar_memoria_nexus_background():
@@ -150,8 +150,47 @@ def atualizar_memoria_nexus_background():
 atualizar_memoria_nexus_background()
 
 # ==============================================================================
-# 4. FUNÇÕES DE APRENDIZADO E SEGURANÇA (KILL SWITCH)
+# 4. FUNÇÕES DE APRENDIZADO, SEGURANÇA E CRONÔMETRO DIÁRIO
 # ==============================================================================
+
+# --- NOVO CRONÔMETRO DIGITAL PARA O LIMITE DIÁRIO (NÃO TRAVA O SITE) ---
+def exibir_cronometro_cota_diaria(mensagem_erro):
+    # Calcula os segundos até a meia-noite (UTC), que é quando as cotas resetam
+    agora = datetime.now(timezone.utc)
+    amanha = agora + timedelta(days=1)
+    meia_noite = datetime(amanha.year, amanha.month, amanha.day, tzinfo=timezone.utc)
+    segundos_restantes = int((meia_noite - agora).total_seconds())
+
+    st.error(mensagem_erro)
+    
+    html_cronometro = f"""
+    <div style="background-color: rgba(15, 23, 42, 0.9); border: 1px solid #ff4b4b; border-radius: 12px; padding: 25px; text-align: center; color: white; font-family: 'Inter', sans-serif;">
+        <h4 style="margin-top: 0; color: #ff4b4b; font-size: 1.1rem; text-transform: uppercase;">⏳ Reset do Limite Diário (UTC):</h4>
+        <h1 id="timer_diario" style="font-family: monospace; letter-spacing: 5px; color: #00ff88; font-size: 3.5rem; margin: 15px 0; text-shadow: 0px 0px 10px rgba(0, 255, 136, 0.4);">00:00:00</h1>
+        <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 0;">Você pode deixar esta página aberta. O sistema avisará quando recarregar.</p>
+        <script>
+            var timeLeft = {segundos_restantes};
+            var timerEl = document.getElementById('timer_diario');
+            var countdown = setInterval(function() {{
+                if(timeLeft <= 0) {{ 
+                    timerEl.innerHTML = "RECARREGADO!"; 
+                    timerEl.style.color = "#00ff88";
+                    clearInterval(countdown);
+                    return; 
+                }}
+                timeLeft--;
+                var h = Math.floor(timeLeft / 3600);
+                var m = Math.floor((timeLeft % 3600) / 60);
+                var s = timeLeft % 60;
+                timerEl.innerHTML = (h < 10 ? "0" + h : h) + ":" + (m < 10 ? "0" + m : m) + ":" + (s < 10 ? "0" + s : s);
+            }}, 1000);
+        </script>
+    </div>
+    """
+    components.html(html_cronometro, height=250)
+    st.stop()
+# --------------------------------------------------------------------------
+
 def buscar_performance_nexus(ativo):
     try:
         docs = db.collection("resultados_nexus").where("ativo", "==", ativo).order_by("timestamp", direction=firestore.Query.DESCENDING).limit(10).get()
@@ -364,7 +403,7 @@ components.html(html_grafico, height=450)
 st.markdown("---")
 
 # ==============================================================================
-# 6. O PILOTO AUTOMÁTICO E CHAT MANUAL
+# 6. O PILOTO AUTOMÁTICO E CHAT MANUAL (AGORA COM DEFESA DE COTAS)
 # ==============================================================================
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -434,7 +473,25 @@ if auto_mode:
                 st.session_state.last_ativo = ativo_para_ler
                 
             except Exception as e:
-                st.error(f"Erro no Processador Quântico IA: {e}")
+                erro_str = str(e).lower()
+                # SISTEMA DEFENSIVO PARA COTA EM MODO AUTOMÁTICO
+                if "429" in erro_str or "quota" in erro_str or "rate limit" in erro_str:
+                    if "day" in erro_str or ("freetier" in erro_str and "minute" not in erro_str):
+                        exibir_cronometro_cota_diaria("🚨 **COTA DIÁRIA DO PILOTO AUTOMÁTICO ESGOTADA!** Você usou todos os créditos gratuitos da IA para hoje.")
+                    else:
+                        st.warning("⚠️ Limite de requisições por minuto atingido. Resfriando por 60s...")
+                        cooldown_ph = st.empty()
+                        cbar = st.progress(0.0)
+                        for sec in range(60, 0, -1):
+                            cooldown_ph.info(f"⏳ Recarregando conexão para não sobrecarregar API: **{sec}s**")
+                            cbar.progress((60 - sec) / 60)
+                            time.sleep(1)
+                        cooldown_ph.empty()
+                        cbar.empty()
+                        st.rerun()
+                else:
+                    st.error(f"Erro no Processador Quântico IA: {e}")
+                    st.stop()
             
         st.markdown("---")
         status_text = st.empty()
@@ -549,21 +606,22 @@ else:
                     st.session_state.last_ativo = ticker_alvo
 
                 except Exception as e:
-                    # TRATAMENTO DE ERRO DE COTA DO GOOGLE COM CRONÔMETRO VISUAL:
-                    if "429" in str(e) or "Quota exceeded" in str(e):
-                        st.warning("⚠️ Limite de requisições do Gemini (Plano Gratuito) atingido. Ativando protocolo de resfriamento para recarregar a cota...")
-                        
-                        cooldown_placeholder = st.empty()
-                        cooldown_bar = st.progress(0.0)
-                        
-                        for sec in range(60, 0, -1):
-                            cooldown_placeholder.info(f"⏳ Recarregando conexão com o servidor. Liberação em: **{sec} segundos**")
-                            cooldown_bar.progress((60 - sec) / 60)
-                            time.sleep(1)
-                            
-                        cooldown_placeholder.success("✅ Cota recarregada! Você já pode clicar no botão 'ANALISAR' novamente.")
-                        cooldown_bar.empty()
-                        st.stop()
+                    erro_str = str(e).lower()
+                    # SISTEMA DEFENSIVO INTELIGENTE PARA COTA DE IMAGENS (GEMINI)
+                    if "429" in erro_str or "quota exceeded" in erro_str or "rate limit" in erro_str:
+                        if "requests_per_day" in erro_str or ("freetier" in erro_str and "minute" not in erro_str):
+                             exibir_cronometro_cota_diaria("🚨 **COTA DIÁRIA VISUAL (GEMINI) ESGOTADA!** Você usou todos os créditos gratuitos para leitura de gráficos hoje.")
+                        else:
+                            st.warning("⚠️ Limite de imagens por minuto do Gemini atingido. Ativando protocolo de resfriamento...")
+                            cooldown_placeholder = st.empty()
+                            cooldown_bar = st.progress(0.0)
+                            for sec in range(60, 0, -1):
+                                cooldown_placeholder.info(f"⏳ Recarregando conexão com o servidor. Liberação em: **{sec} segundos**")
+                                cooldown_bar.progress((60 - sec) / 60)
+                                time.sleep(1)
+                            cooldown_placeholder.success("✅ Cota recarregada! O sistema tentará processar a imagem novamente.")
+                            cooldown_bar.empty()
+                            st.rerun()
                     else:
                         st.error(f"🚨 ALERTA DO SISTEMA: {e}")
                         st.stop()
