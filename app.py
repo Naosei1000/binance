@@ -426,16 +426,21 @@ st.markdown("---")
 # 6. O PILOTO AUTOMÁTICO E CHAT MANUAL
 # ==============================================================================
 
+# O HISTÓRICO DE MENSAGENS AGORA FICA AQUI EM CIMA PARA APARECER EM TODOS OS MODOS
+for message in st.session_state.messages:
+    if message["role"] != "system":
+        icone_avatar = "🧑‍💻" if message["role"] == "user" else "💠"
+        with st.chat_message(message["role"], avatar=icone_avatar):
+            st.markdown(message["content"])
+
 auto_mode = st.toggle("🟢 ATIVAR PILOTO AUTOMÁTICO (VARREDURA MULTI-TIMEFRAME CONSTANTE)")
-container_log = st.empty()
 
 if auto_mode:
     # --- MODO 1: O ROBÔ LÊ O MERCADO SOZINHO VIA DADOS (HFT MULTI-TIMEFRAME) ---
     tempo_agora = time.time()
     
     if tempo_agora >= st.session_state.next_auto_run:
-        with container_log.container():
-            st.warning("📡 SCANNER ATIVADO: Puxando histórico Multi-Timeframe da corretora...")
+        with st.spinner("📡 SCANNER ATIVADO: Puxando histórico Multi-Timeframe da corretora..."):
             
             ativo_para_ler = "BTC-USD" if "BTC" in ativo_live else "ETH-USD"
             if "EUR" in ativo_live: ativo_para_ler = "EURUSD=X"
@@ -486,7 +491,9 @@ if auto_mode:
                         temperature=0.1, max_tokens=256
                     ).choices[0].message.content
                     
-                    st.markdown(resposta)
+                    # SALVANDO A RESPOSTA NO HISTÓRICO ANTES DE ATUALIZAR A PÁGINA (A CORREÇÃO DO BUG)
+                    st.session_state.messages.append({"role": "assistant", "content": f"**[🤖 MODO AUTOMÁTICO - {hora_atual}]**\n\n{resposta}"})
+                    
                     st.session_state.last_op_id = str(uuid.uuid4())
                     st.session_state.last_ativo = ativo_para_ler
                     
@@ -519,7 +526,7 @@ if auto_mode:
                         st.stop()
                         
     else:
-        # NOVO LOOP DESBLOQUEADO MANTENDO SUAS MENSAGENS VISUAIS
+        # LOOP DESBLOQUEADO MANTENDO SUAS MENSAGENS VISUAIS
         st.markdown("---")
         segundos_restantes = int(st.session_state.next_auto_run - tempo_agora)
         progresso = max(0.0, min(1.0, (60 - segundos_restantes) / 60.0))
@@ -535,12 +542,6 @@ if auto_mode:
 
 else:
     # --- MODO 2: O MODO ORIGINAL (USUÁRIO MANDA O PRINT) ---
-    for message in st.session_state.messages:
-        if message["role"] != "system":
-            icone_avatar = "🧑‍💻" if message["role"] == "user" else "💠"
-            with st.chat_message(message["role"], avatar=icone_avatar):
-                st.markdown(message["content"])
-
     with st.popover("🖼️ Anexar Print do Gráfico (Análise Manual)"):
         uploaded_files = st.file_uploader("Fotos", type=["png", "jpg", "jpeg"], accept_multiple_files=True, label_visibility="collapsed")
 
