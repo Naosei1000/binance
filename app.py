@@ -194,7 +194,7 @@ def traduzir_nome_visual_para_ticker(nome_visual):
 
 # ---> NOVA FUNÇÃO DETETIVE INSERIDA AQUI <---
 def puxar_grafico_binance(simbolo="BTCUSDT", intervalo="5m", limite=100):
-    url = "https://api.binance.com/api/v3/klines"
+    url = "https://api.binance.us/api/v3/klines" # <-- ALTERADO PARA .US
     parametros = {"symbol": simbolo, "interval": intervalo, "limit": limite}
     
     try:
