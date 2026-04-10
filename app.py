@@ -13,7 +13,7 @@ import uuid
 import pandas as pd
 import random
 import numpy as np
-import requests 
+import requests
 
 # ==============================================================================
 # 1. CONFIGURAÇÃO VISUAL E LUXUOSA DO SITE (Foco Mobile)
@@ -98,7 +98,7 @@ except Exception as e:
     st.stop()
 
 # ==============================================================================
-# 3. AUTO-ATUALIZAÇÃO QUÂNTICA E ROTINAS
+# 3. AUTO-ATUALIZAÇÃO QUÂNTICA (MACRO, SAZONALIDADE 5 ANOS, ATR E NOTÍCIAS)
 # ==============================================================================
 @st.cache_data(ttl=43200) 
 def atualizar_memoria_nexus_background():
@@ -153,9 +153,8 @@ atualizar_memoria_nexus_background()
 # 4. FUNÇÕES DE APRENDIZADO, SEGURANÇA E CRONÔMETRO DIÁRIO
 # ==============================================================================
 
-# --- NOVO CRONÔMETRO DIGITAL PARA O LIMITE DIÁRIO (NÃO TRAVA O SITE) ---
 def exibir_cronometro_cota_diaria(mensagem_erro):
-    # Calcula os segundos até a meia-noite (UTC), que é quando as cotas resetam
+    """Exibe um cronômetro visual em JavaScript até a meia-noite UTC (Reset de Cota)"""
     agora = datetime.now(timezone.utc)
     amanha = agora + timedelta(days=1)
     meia_noite = datetime(amanha.year, amanha.month, amanha.day, tzinfo=timezone.utc)
@@ -189,7 +188,7 @@ def exibir_cronometro_cota_diaria(mensagem_erro):
     """
     components.html(html_cronometro, height=250)
     st.stop()
-# --------------------------------------------------------------------------
+
 
 def buscar_performance_nexus(ativo):
     try:
@@ -403,7 +402,7 @@ components.html(html_grafico, height=450)
 st.markdown("---")
 
 # ==============================================================================
-# 6. O PILOTO AUTOMÁTICO E CHAT MANUAL (AGORA COM DEFESA DE COTAS)
+# 6. O PILOTO AUTOMÁTICO E CHAT MANUAL
 # ==============================================================================
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -473,22 +472,25 @@ if auto_mode:
                 st.session_state.last_ativo = ativo_para_ler
                 
             except Exception as e:
-                erro_str = str(e).lower()
-                # SISTEMA DEFENSIVO PARA COTA EM MODO AUTOMÁTICO
-                if "429" in erro_str or "quota" in erro_str or "rate limit" in erro_str:
-                    if "day" in erro_str or ("freetier" in erro_str and "minute" not in erro_str):
-                        exibir_cronometro_cota_diaria("🚨 **COTA DIÁRIA DO PILOTO AUTOMÁTICO ESGOTADA!** Você usou todos os créditos gratuitos da IA para hoje.")
-                    else:
-                        st.warning("⚠️ Limite de requisições por minuto atingido. Resfriando por 60s...")
+                erro_str = str(e)
+                # VERIFICAÇÃO INTELIGENTE DE COTA NO MODO AUTOMÁTICO
+                if "429" in erro_str or "Quota exceeded" in erro_str:
+                    delay_match = re.search(r'retry_delay\s*\{\s*seconds:\s*(\d+)\s*\}', erro_str)
+                    wait_seconds = int(delay_match.group(1)) if delay_match else None
+                    
+                    if wait_seconds and wait_seconds < 300: # Cota de Minuto
+                        st.warning(f"⚠️ Limite por minuto da IA atingido. Resfriando por {wait_seconds}s...")
                         cooldown_ph = st.empty()
                         cbar = st.progress(0.0)
-                        for sec in range(60, 0, -1):
-                            cooldown_ph.info(f"⏳ Recarregando conexão para não sobrecarregar API: **{sec}s**")
-                            cbar.progress((60 - sec) / 60)
+                        for sec in range(wait_seconds, 0, -1):
+                            cooldown_ph.info(f"⏳ Recarregando API para evitar sobrecarga: **{sec}s**")
+                            cbar.progress((wait_seconds - sec) / wait_seconds)
                             time.sleep(1)
                         cooldown_ph.empty()
                         cbar.empty()
                         st.rerun()
+                    else: # Cota Diária
+                        exibir_cronometro_cota_diaria("🚨 COTA DIÁRIA DO PILOTO AUTOMÁTICO ESGOTADA! Você usou todos os créditos para hoje.")
                 else:
                     st.error(f"Erro no Processador Quântico IA: {e}")
                     st.stop()
@@ -606,22 +608,25 @@ else:
                     st.session_state.last_ativo = ticker_alvo
 
                 except Exception as e:
-                    erro_str = str(e).lower()
-                    # SISTEMA DEFENSIVO INTELIGENTE PARA COTA DE IMAGENS (GEMINI)
-                    if "429" in erro_str or "quota exceeded" in erro_str or "rate limit" in erro_str:
-                        if "requests_per_day" in erro_str or ("freetier" in erro_str and "minute" not in erro_str):
-                             exibir_cronometro_cota_diaria("🚨 **COTA DIÁRIA VISUAL (GEMINI) ESGOTADA!** Você usou todos os créditos gratuitos para leitura de gráficos hoje.")
-                        else:
-                            st.warning("⚠️ Limite de imagens por minuto do Gemini atingido. Ativando protocolo de resfriamento...")
-                            cooldown_placeholder = st.empty()
-                            cooldown_bar = st.progress(0.0)
-                            for sec in range(60, 0, -1):
-                                cooldown_placeholder.info(f"⏳ Recarregando conexão com o servidor. Liberação em: **{sec} segundos**")
-                                cooldown_bar.progress((60 - sec) / 60)
+                    erro_str = str(e)
+                    # VERIFICAÇÃO INTELIGENTE DE COTA NO MODO MANUAL
+                    if "429" in erro_str or "Quota exceeded" in erro_str:
+                        delay_match = re.search(r'retry_delay\s*\{\s*seconds:\s*(\d+)\s*\}', erro_str)
+                        wait_seconds = int(delay_match.group(1)) if delay_match else None
+                        
+                        if wait_seconds and wait_seconds < 300: # Cota de Minuto (Resfriamento curto)
+                            st.warning(f"⚠️ Limite de imagens por minuto atingido. Ativando protocolo de resfriamento ({wait_seconds}s)...")
+                            cooldown_ph = st.empty()
+                            cbar = st.progress(0.0)
+                            for sec in range(wait_seconds, 0, -1):
+                                cooldown_ph.info(f"⏳ Recarregando conexão com o servidor. Liberação em: **{sec} segundos**")
+                                cbar.progress((wait_seconds - sec) / wait_seconds)
                                 time.sleep(1)
-                            cooldown_placeholder.success("✅ Cota recarregada! O sistema tentará processar a imagem novamente.")
-                            cooldown_bar.empty()
+                            cooldown_ph.success("✅ Cota recarregada! O sistema tentará processar a imagem novamente no próximo clique.")
+                            cbar.empty()
                             st.rerun()
+                        else: # Cota Diária
+                            exibir_cronometro_cota_diaria("🚨 COTA DIÁRIA VISUAL (GEMINI) ESGOTADA! Você usou todos os créditos gratuitos para hoje.")
                     else:
                         st.error(f"🚨 ALERTA DO SISTEMA: {e}")
                         st.stop()
