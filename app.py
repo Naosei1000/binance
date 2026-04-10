@@ -68,6 +68,11 @@ st.markdown("""
         font-weight: 700; transition: all 0.3s ease;
     }
     .stToggle { margin-bottom: 1rem; }
+    
+    /* Barra de progresso do cronômetro mais visível */
+    .stProgress > div > div > div > div {
+        background-color: #00ff88;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -112,7 +117,6 @@ def atualizar_memoria_nexus_background():
             total_dias = len(hist_mes)
             winrate_sazonal = (dias_green / total_dias * 100) if total_dias > 0 else 50
             
-            # Cálculo ATR 200 para Momentum
             historico_5a['TR'] = historico_5a['High'] - historico_5a['Low']
             atr_200 = float(historico_5a['TR'].tail(200).mean())
 
@@ -120,7 +124,6 @@ def atualizar_memoria_nexus_background():
             titulos_noticias = [n['title'] for n in noticias[:3]] if noticias else ["Nenhuma notícia relevante."]
             sentimento_bruto = " / ".join(titulos_noticias)
             
-            # Bias Institucional (Baleias)
             bias_institucional = "ALTA" if any(x in sentimento_bruto.upper() for x in ["ETF", "SEC", "WHALE", "GOVERNMENT", "FED"]) else "NEUTRO"
 
             linha_hoje = historico_5a.iloc[-1]
@@ -159,7 +162,6 @@ def buscar_performance_nexus(ativo):
         total = len(docs)
         taxa = (wins / total) * 100
         
-        # Conta perdas seguidas
         loss_seq = 0
         for r in resultados:
             if r == "LOSS": loss_seq += 1
@@ -186,106 +188,132 @@ def traduzir_nome_visual_para_ticker(nome_visual):
     return "BTC-USD"
 
 # ==============================================================================
-# 5. O LEITOR MATEMÁTICO AO VIVO (O CÉREBRO AUTÔNOMO)
+# 5. O CÉREBRO MATEMÁTICO MULTI-TIMEFRAME (CORREÇÃO DEFINITIVA DO HFT)
 # ==============================================================================
-def ler_dados_mercado_ao_vivo(ticker):
+def processar_timeframe(df):
+    """Função blindada para evitar erros matemáticos com Pandas"""
+    # Extrai as colunas como Séries unidimensionais seguras
+    c = df['Close'].squeeze()
+    o = df['Open'].squeeze()
+    h = df['High'].squeeze()
+    l = df['Low'].squeeze()
+
+    # RSI
+    delta = c.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # EMA
+    ema_9 = c.ewm(span=9, adjust=False).mean()
+    ema_21 = c.ewm(span=21, adjust=False).mean()
+
+    # Dados da vela atual (Garante que sejam números limpos e não arrays)
+    preco_atual = float(c.iloc[-1])
+    rsi_atual = float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else 50.0
+    tendencia = "ALTA" if float(ema_9.iloc[-1]) > float(ema_21.iloc[-1]) else "BAIXA"
+
+    # Sweeps
+    corpo = abs(float(c.iloc[-1]) - float(o.iloc[-1]))
+    p_sup = float(h.iloc[-1]) - max(float(o.iloc[-1]), float(c.iloc[-1]))
+    p_inf = min(float(o.iloc[-1]), float(c.iloc[-1])) - float(l.iloc[-1])
+
+    sweep_alta = "SIM" if p_sup > (corpo * 2.5) else "NÃO"
+    sweep_baixa = "SIM" if p_inf > (corpo * 2.5) else "NÃO"
+
+    return preco_atual, rsi_atual, tendencia, sweep_alta, sweep_baixa
+
+def ler_dados_mercado_ao_vivo_multi_tf(ticker):
     """
-    Função crítica que lê as velas reais via código, calcula RSI, Médias e Pavios.
-    O Nexus usa isso para analisar o mercado automaticamente sem precisar de print.
+    Lê M5, M30, H1 e D1 ao vivo da corretora e cruza tudo.
     """
     try:
-        df = yf.download(ticker, period="5d", interval="5m", progress=False)
-        if df.empty: return "Falha ao puxar dados da corretora via API."
-        
-        # Calcula RSI 14
-        delta = df['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        df['RSI'] = 100 - (100 / (1 + rs))
-        
-        # Calcula EMA
-        df['EMA_9'] = df['Close'].ewm(span=9, adjust=False).mean()
-        df['EMA_21'] = df['Close'].ewm(span=21, adjust=False).mean()
-        
-        # Análise de Preço da Última Vela
-        vela_atual = df.tail(3).iloc[-1]
-        
-        corpo = abs(vela_atual['Close'] - vela_atual['Open'])
-        pavio_sup = float(vela_atual['High']) - max(float(vela_atual['Open']), float(vela_atual['Close']))
-        pavio_inf = min(float(vela_atual['Open']), float(vela_atual['Close'])) - float(vela_atual['Low'])
-        
-        sweep_baixa = "SIM (Manipulação para Varejo)" if pavio_inf > (corpo * 2.5) else "NÃO"
-        sweep_alta = "SIM (Manipulação para Varejo)" if pavio_sup > (corpo * 2.5) else "NÃO"
-        
-        tendencia_micro = "ALTA" if vela_atual['EMA_9'].iloc[0] > vela_atual['EMA_21'].iloc[0] else "BAIXA"
-        
+        # Baixando os dados silenciosamente
+        df_m5 = yf.download(ticker, period="5d", interval="5m", progress=False)
+        df_m30 = yf.download(ticker, period="1mo", interval="30m", progress=False)
+        df_h1 = yf.download(ticker, period="1mo", interval="1h", progress=False)
+        df_d1 = yf.download(ticker, period="3mo", interval="1d", progress=False)
+
+        if df_m5.empty or df_m30.empty or df_h1.empty or df_d1.empty: 
+            return "Falha ao puxar dados da corretora via API."
+
+        # Processando cada tempo gráfico
+        p_m5, rsi_m5, t_m5, sa_m5, sb_m5 = processar_timeframe(df_m5)
+        _, rsi_m30, t_m30, _, _ = processar_timeframe(df_m30)
+        _, rsi_h1, t_h1, _, _ = processar_timeframe(df_h1)
+        _, rsi_d1, t_d1, _, _ = processar_timeframe(df_d1)
+
         resumo_dados = f"""
-        * STATUS MATEMÁTICO DO M5 AGORA:
-        - Preço: {float(vela_atual['Close']):.4f}
-        - RSI: {float(vela_atual['RSI']):.2f}
-        - Tendência EMA: {tendencia_micro}
-        - Liquidity Sweep Inferior (Stops): {sweep_baixa}
-        - Liquidity Sweep Superior (Stops): {sweep_alta}
+        * STATUS MULTI-TIMEFRAME (M5, M30, H1, D1):
+        - Preço Atual: {p_m5:.4f}
+        
+        - TENDÊNCIA MACRO (D1): {t_d1} | RSI: {rsi_d1:.1f}
+        - TENDÊNCIA MÉDIA (H1): {t_h1} | RSI: {rsi_h1:.1f}
+        - TENDÊNCIA CURTA (M30): {t_m30} | RSI: {rsi_m30:.1f}
+        - TENDÊNCIA MICRO (M5): {t_m5} | RSI: {rsi_m5:.1f}
+        
+        - Liquidity Sweep Inferior Detectado no M5 (Manipulação): {sb_m5}
+        - Liquidity Sweep Superior Detectado no M5 (Manipulação): {sa_m5}
         """
         return resumo_dados
     except Exception as e:
-        return f"Erro na leitura matemática HFT: {e}"
+        return f"Erro na leitura matemática HFT Multi-Timeframe: {e}"
 
 # ==============================================================================
-# 5.5 HUB DE MONITORAMENTO AO VIVO E CORRETORAS
+# 5.5 HUB DE MONITORAMENTO E GRÁFICO AO VIVO (VISÍVEL)
 # ==============================================================================
 st.markdown('<div class="nexus-logo">NEXUS <span>QUANTUM</span></div>', unsafe_allow_html=True)
 
-with st.expander("📡 HUB DE MONITORAMENTO AO VIVO E CORRETORAS", expanded=False):
-    st.markdown("<p style='font-size:0.9rem; color:#e2e8f0;'>Conexão de dados da corretora. O gráfico abaixo é em tempo real.</p>", unsafe_allow_html=True)
-    
-    col_ativo, col_corretora = st.columns(2)
-    with col_ativo:
-        ativo_live = st.selectbox("Ativo para Monitorar:", ["BINANCE:BTCUSDT", "BINANCE:ETHUSDT", "FX:EURUSD", "OANDA:XAUUSD"])
-    with col_corretora:
-        corretora_selecionada = st.selectbox("Selecione sua Corretora:", ["Binance", "Bybit", "OKX", "B3 (Em breve)"])
-    
-    api_key_input = st.text_input("API Key (Leitura)", type="password", placeholder="Cole sua API Key aqui...")
-    
-    if st.button("SINCRONIZAR DADOS"):
-        st.toast(f"Conectando ao terminal {corretora_selecionada}...", icon="⚡")
-        time.sleep(1)
-        st.success("✅ Conexão Simulada Estabelecida. Gráfico e Scanner prontos.")
+st.markdown("### 📡 HUB DE MONITORAMENTO AO VIVO E CORRETORAS")
+st.markdown("<p style='font-size:0.9rem; color:#e2e8f0;'>Gráfico e Cérebro HFT estão sincronizados em tempo real.</p>", unsafe_allow_html=True)
 
-    # Gráfico do TradingView para o usuário visualizar
-    html_grafico = f"""
-    <div class="tradingview-widget-container">
-      <div id="tradingview_nexus"></div>
-      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-      <script type="text/javascript">
-      new TradingView.widget(
-      {{
-      "width": "100%",
-      "height": 400,
-      "symbol": "{ativo_live}",
-      "interval": "5",
-      "timezone": "Etc/UTC",
-      "theme": "dark",
-      "style": "1",
-      "locale": "br",
-      "enable_publishing": false,
-      "backgroundColor": "rgba(15, 23, 42, 0.7)",
-      "gridColor": "rgba(0, 255, 136, 0.05)",
-      "hide_top_toolbar": false,
-      "save_image": false,
-      "container_id": "tradingview_nexus"
-    }}
-      );
-      </script>
-    </div>
-    """
-    components.html(html_grafico, height=400)
+col_ativo, col_corretora = st.columns(2)
+with col_ativo:
+    ativo_live = st.selectbox("Ativo para Monitorar:", ["BINANCE:BTCUSDT", "BINANCE:ETHUSDT", "FX:EURUSD", "OANDA:XAUUSD"])
+with col_corretora:
+    corretora_selecionada = st.selectbox("Selecione sua Corretora:", ["Binance", "Bybit", "OKX", "B3 (Em breve)"])
+
+api_key_input = st.text_input("API Key (Leitura - Opcional para simulação)", type="password", placeholder="Cole sua API Key aqui...")
+
+if st.button("SINCRONIZAR DADOS"):
+    st.toast(f"Conectando ao terminal {corretora_selecionada}...", icon="⚡")
+    time.sleep(1)
+    st.success("✅ Conexão Simulada Estabelecida. Gráfico e Scanner prontos.")
+
+# Gráfico do TradingView TOTALMENTE VISÍVEL (Fora do expander)
+html_grafico = f"""
+<div class="tradingview-widget-container">
+  <div id="tradingview_nexus"></div>
+  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+  <script type="text/javascript">
+  new TradingView.widget(
+  {{
+  "width": "100%",
+  "height": 400,
+  "symbol": "{ativo_live}",
+  "interval": "5",
+  "timezone": "Etc/UTC",
+  "theme": "dark",
+  "style": "1",
+  "locale": "br",
+  "enable_publishing": false,
+  "backgroundColor": "rgba(15, 23, 42, 0.7)",
+  "gridColor": "rgba(0, 255, 136, 0.05)",
+  "hide_top_toolbar": false,
+  "save_image": false,
+  "container_id": "tradingview_nexus"
+}}
+  );
+  </script>
+</div>
+"""
+components.html(html_grafico, height=400)
 
 st.markdown("---")
 
 # ==============================================================================
-# 6. O PILOTO AUTOMÁTICO (LEITURA 24/7 SEM PRINT) E CHAT MANUAL
+# 6. O PILOTO AUTOMÁTICO (LEITURA 24/7) E CHAT MANUAL
 # ==============================================================================
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -294,20 +322,20 @@ if "last_op_id" not in st.session_state:
 if "last_ativo" not in st.session_state:
     st.session_state.last_ativo = None
 
-auto_mode = st.toggle("🟢 ATIVAR PILOTO AUTOMÁTICO (NEXUS LÊ O GRÁFICO SOZINHO)")
+auto_mode = st.toggle("🟢 ATIVAR PILOTO AUTOMÁTICO (NEXUS LÊ TODOS OS TEMPOS GRÁFICOS SOZINHO)")
 container_log = st.empty()
 
 if auto_mode:
-    # --- MODO 1: O ROBÔ LÊ O MERCADO SOZINHO VIA DADOS (VÍDEOS 9, 10, 11) ---
+    # --- MODO 1: O ROBÔ LÊ O MERCADO SOZINHO VIA DADOS (HFT MULTI-TIMEFRAME) ---
     with container_log.container():
-        st.warning("📡 SCANNER ATIVADO: O Nexus está puxando a fita de preços da corretora...")
+        st.warning("📡 SCANNER ATIVADO: O Nexus está puxando e cruzando D1, H1, M30 e M5...")
         
         ativo_para_ler = "BTC-USD" if "BTC" in ativo_live else "ETH-USD"
         if "EUR" in ativo_live: ativo_para_ler = "EURUSD=X"
         if "XAU" in ativo_live: ativo_para_ler = "GC=F"
         
-        # Puxa os dados da corretora
-        dados_matematicos = ler_dados_mercado_ao_vivo(ativo_para_ler)
+        # Puxa os dados da corretora (Função Nova e Robusta)
+        dados_matematicos = ler_dados_mercado_ao_vivo_multi_tf(ativo_para_ler)
         
         # Verifica a segurança (Kill Switch)
         perf = buscar_performance_nexus(ativo_para_ler)
@@ -320,24 +348,24 @@ if auto_mode:
         
         # O prompt Autônomo Institucional
         inst_auto = """
-        Você é o NEXUS QUANTUM AUTÔNOMO. Você opera lendo dados matemáticos puros (OHLCV).
-        CRITÉRIOS:
-        1. Se RSI < 30 e Sweep Inferior detectado = COMPRA FORTE.
-        2. Se RSI > 70 e Sweep Superior detectado = VENDA FORTE.
-        3. Se a Tendência Micro for contra a Diária = AGUARDAR.
+        Você é o NEXUS QUANTUM AUTÔNOMO MULTI-TIMEFRAME. Você opera lendo dados de D1, H1, M30 e M5.
+        CRITÉRIOS DE APROVAÇÃO:
+        1. Não opere se o M5 estiver contra o M30 e o H1.
+        2. Se RSI < 30 em múltiplos tempos e Sweep Inferior detectado = COMPRA FORTE.
+        3. Se RSI > 70 em múltiplos tempos e Sweep Superior detectado = VENDA FORTE.
         
         RESPONDA:
-        1. 🔬 LEITURA QUÂNTICA AO VIVO: (Análise dos dados matemáticos M5).
+        1. 🔬 LEITURA QUÂNTICA AO VIVO: (Análise do alinhamento D1/H1/M30/M5).
         2. 🐋 BIAS INSTITUCIONAL: (Sazonalidade e Notícias).
         3. 🎯 NOTA DE OPORTUNIDADE: [0/10].
         
         ## 🎯 SINAL DO ALGORITMO
         ORDEM: [COMPRA / VENDA / AGUARDAR NOVA VELA]
-        ALVO: [Sugerir 1:4] | STOP: [Atrás do Liquidity Sweep]
-        LADDER (DCA): [Ponto de Recompra se cair]
+        ALVO: [Sugerir 1:4] | STOP: [Atrás da Manipulação]
+        LADDER (DCA): [Ponto de Recompra se o preço for manipulado de novo]
         """
         
-        prompt_final = f"DADOS DA CORRETORA (M5):\n{dados_matematicos}\nMACRO/SAZONAL:\n{macro_info}\nPERFORMANCE:\n{perf['texto']}"
+        prompt_final = f"DADOS DA CORRETORA (MULTI-TF):\n{dados_matematicos}\nMACRO/SAZONAL:\n{macro_info}\nPERFORMANCE:\n{perf['texto']}"
         
         try:
             resposta = groq_client.chat.completions.create(
@@ -346,7 +374,7 @@ if auto_mode:
                 temperature=0.1, max_tokens=1024
             ).choices[0].message.content
             
-            st.success("✅ Varredura Concluída com Sucesso!")
+            st.success("✅ Varredura Multi-Timeframe Concluída!")
             st.markdown(resposta)
             
             st.session_state.last_op_id = str(uuid.uuid4())
@@ -355,8 +383,18 @@ if auto_mode:
         except Exception as e:
             st.error(f"Erro na IA: {e}")
             
-        st.info("⏳ O Nexus está aguardando o fechamento da próxima vela para ler o gráfico novamente (Cooldown de 60s)...")
-        time.sleep(60) 
+        # O NOVO CRONÔMETRO VISUAL (Contagem Regressiva Interativa)
+        st.markdown("---")
+        status_text = st.empty()
+        progress_bar = st.progress(0.0)
+        
+        for i in range(60, 0, -1):
+            status_text.info(f"⏳ Analisando dados... Aguardando fechamento da vela. Próxima leitura em: **{i} segundos**")
+            progress_bar.progress((60 - i) / 60)
+            time.sleep(1)
+            
+        status_text.empty()
+        progress_bar.empty()
         st.rerun()
 
 else:
@@ -431,7 +469,7 @@ else:
                         dados_macro_str = "Sem dados quantitativos hoje."
                         noticias_hoje = "Sentimento atual cego."
 
-                    instrucao_nexus = """
+                    instrucao_nexus_manual = """
                     Você é o NEXUS QUANTUM VANGUARD.
                     FORMATO: 1. RAIO-X INSTITUCIONAL. 2. ANÁLISE TÉCNICA. 3. NOTA DE CONFLUÊNCIA.
                     VEREDITO: ORDEM, ALVO, ZONA DCA, TRAILING STOP, STOP LOSS.
@@ -440,7 +478,7 @@ else:
 
                     resposta_nexus = groq_client.chat.completions.create(
                         model="llama-3.3-70b-versatile",
-                        messages=[{"role": "system", "content": instrucao_nexus}, {"role": "user", "content": final_prompt}],
+                        messages=[{"role": "system", "content": instrucao_nexus_manual}, {"role": "user", "content": final_prompt}],
                         temperature=0.1, max_tokens=1024
                     ).choices[0].message.content
 
