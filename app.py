@@ -1,14 +1,3 @@
-Comandante, você tem absoluta e total razão. Eu tentei enxugar o código para ele caber na tela sem travar a resposta, mas acabei cortando a "alma" da inteligência artificial: os **Prompts de Engenharia** que nós construímos com base nos 4 vídeos. 
-
-Sem as instruções detalhadas no `instrucao_olhos` e no `instrucao_nexus`, o Gemini e o Groq não sabem que precisam procurar os indicadores do Blackat, contar os toques no suporte, usar a regra dos terços ou calcular o Score de 0 a 10. O código Python estava lá, mas o "treinamento" foi diluído.
-
-Você quer o código completo, sem cortes, com 100% das estratégias injetadas. É exatamente isso que você vai receber agora.
-
-Este é o **NEXUS QUANTUM DEFINITIVO**. Juntei a sua interface luxuosa, o sistema de botões WIN/LOSS, a busca de 5 anos do Yahoo Finance, e **todas as regras dos 4 vídeos descritas em detalhes para a IA**.
-
-Copie e cole este monstro no seu `app.py`:
-
-```python
 import streamlit as st
 import google.generativeai as genai
 from groq import Groq
@@ -109,24 +98,20 @@ def atualizar_memoria_nexus_background():
         
         for ticker in moedas_macro:
             ativo = yf.Ticker(ticker)
-            # Baixa histórico de 5 anos para cálculo da Sazonalidade
             historico_5a = ativo.history(period="5y") 
             
             if historico_5a.empty:
                 continue
                 
-            # Cálculo de Sazonalidade (Win Rate do mês atual nos últimos 5 anos)
             hist_mes = historico_5a[historico_5a.index.month == mes_atual]
             dias_green = sum(1 for _, row in hist_mes.iterrows() if row['Close'] > row['Open'])
             total_dias = len(hist_mes)
             winrate_sazonal = (dias_green / total_dias * 100) if total_dias > 0 else 50
             
-            # Notícias para Sentimento
             noticias = ativo.news
             titulos_noticias = [n['title'] for n in noticias[:3]] if noticias else ["Nenhuma notícia relevante."]
             sentimento_bruto = " / ".join(titulos_noticias)
             
-            # Tendência do dia atual
             linha_hoje = historico_5a.iloc[-1]
             data_str = datetime.now().strftime('%Y-%m-%d')
             tendencia = "ALTA" if linha_hoje["Close"] > linha_hoje["Open"] else "BAIXA"
@@ -285,7 +270,7 @@ if enviar and uploaded_files:
     with st.chat_message("assistant", avatar="💠"):
         with st.spinner("NEXUS executando protocolo de Confluência Total..."):
             try:
-                # PASSO 1: A VISÃO (EXTRAINDO TODAS AS TÉCNICAS DOS VÍDEOS)
+                # PASSO 1: A VISÃO
                 st.toast("Escaneando Indicadores e Liquidez...", icon="👁️")
                 vision_model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=instrucao_olhos)
                 vision_response = vision_model.generate_content(["Faça a varredura visual completa do ativo.", *imagens_pil])
@@ -299,13 +284,12 @@ if enviar and uploaded_files:
                 
                 ticker_alvo = traduzir_nome_visual_para_ticker(ativo_identificado_na_tela)
                 
-                # PASSO 3: BUSCA ESTATÍSTICA (SAZONALIDADE 5 ANOS E NOTÍCIAS)
+                # PASSO 3: BUSCA ESTATÍSTICA
                 st.toast("Acessando Algoritmos Sazonais e Sentiment...", icon="📰")
                 data_hoje = agora.strftime('%Y-%m-%d')
                 doc_ref = db.collection("historico_macro").document(f"{ticker_alvo}_{data_hoje}")
                 doc = doc_ref.get()
                 
-                # Alerta de Payroll (do Vídeo de Notícias/Calendário)
                 alerta_calendario = ""
                 if agora.weekday() == 4 and agora.day <= 7: 
                     alerta_calendario = "⚠️ ALERTA: Hoje é dia de PAYROLL (NFP). O mercado sofre manipulação pesada institucional (Liquidity Sweeps). Risco Extremo."
@@ -320,11 +304,11 @@ if enviar and uploaded_files:
                     dados_macro_str = f"Sem dados estatísticos quantitativos hoje para {ativo_identificado_na_tela}."
                     noticias_hoje = "Sentimento atual cego."
 
-                # PASSO 4: BUSCA DE PERFORMANCE (MEMÓRIA DE APRENDIZADO)
+                # PASSO 4: BUSCA DE PERFORMANCE
                 st.toast("Carregando Rede Neural de Aprendizado...", icon="🧠")
                 performance_nexus = buscar_performance_nexus(ticker_alvo)
 
-                # PASSO 5: O SUPER PROMPT DE ELITE (A MATRIZ)
+                # PASSO 5: O SUPER PROMPT DE ELITE
                 final_prompt = f"""
 [SISTEMA: Avaliação em Tempo Real. Hoje é {dia_hoje_str}].
 
@@ -365,7 +349,6 @@ SINTETIZE A CONFLUÊNCIA DE TODOS ESTES FATORES E DÊ O VEREDITO.
                 st.session_state.messages.append({"role": "user", "content": f"Print enviado. {comando_usuario}"})
                 st.session_state.messages.append({"role": "assistant", "content": resposta_nexus})
                 
-                # REGISTRA A OPERAÇÃO PARA RECEBER O FEEDBACK DEPOIS
                 st.session_state.last_op_id = str(uuid.uuid4())
                 st.session_state.last_ativo = ticker_alvo
 
@@ -403,4 +386,3 @@ if st.session_state.last_op_id:
             st.session_state.last_op_id = None
             time.sleep(2)
             st.rerun()
-```
