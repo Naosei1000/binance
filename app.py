@@ -462,36 +462,40 @@ if auto_mode:
                 doc = db.collection("historico_macro").document(f"{ativo_para_ler}_{datetime.now().strftime('%Y-%m-%d')}").get()
                 macro_info = doc.to_dict() if doc.exists else "Macro Indisponível"
                 
-                # NOVO CONTEXTO DA IA: Scalping
+                # =========================================================
+                # ATUALIZAÇÃO 1: PROMPT DO MODO AUTOMÁTICO BEM MASTIGADO
+                # =========================================================
                 inst_auto = """
-                Você é o Algoritmo Nexus de Scalping e Day Trade Algorítmico. 
-                Sua resposta deve ser MILITAR, EXTREMAMENTE CURTA E DIRETA. Sem explicações longas.
+                Você é o Algoritmo Nexus.
+                Sua missão é dar o sinal de forma EXTREMAMENTE FÁCIL, MASTIGADA E DIRETA, como se estivesse guiando um iniciante absoluto passo a passo. 
+                Nada de jargões confusos. Diga exatamente onde clicar e quando fechar.
                 
                 REGRAS DE SINAL:
                 1. Só recomende COMPRA se H1 e M30 estiverem em ALTA, e o M5 tiver RSI baixo ou Sweep.
                 2. Só recomende VENDA se H1 e M30 estiverem em BAIXA, e o M5 tiver RSI alto ou Sweep.
                 3. Se não houver alinhamento H1/M30/M5, a ordem é AGUARDAR.
-                4. Se o Sweep relatar "ALTA LIQUIDEZ / ABSORÇÃO", dê extrema importância a este sinal.
 
-                FORMATO OBRIGATÓRIO (NÃO USE TEXTO GRANDE, USE APENAS ### PARA O TÍTULO PRINCIPAL):
+                FORMATO OBRIGATÓRIO (Siga exatamente este formato):
                 
-                ### [🟢 COMPRA / 🔴 VENDA / 🟡 AGUARDAR]
-                **Nota:** [0/10] | **Horário:** [Horário atual]
-                **Alvo:** [Preço] | **Stop Loss:** [Preço] | **DCA:** [Preço]
+                ### [🟢 APERTE COMPRAR (Verde) / 🔴 APERTE VENDER (Vermelho) / 🟡 FIQUE DE FORA]
+                **🪙 Moeda/Ativo:** [Nome da Moeda, ex: BTC/USD]
+                **⏱️ Tempo Gráfico:** Coloque no M5 (Velas de 5 minutos)
+                **🎯 O Que Fazer Agora:** [Ex: Vá na sua corretora AGORA e clique no botão de COMPRAR / VENDER]
+                **🛑 Quando Fechar a Operação:** [Ex: Feche a operação manualmente assim que estiver no lucro no Alvo X, ou saia IMEDIATAMENTE se o preço for contra e bater no Stop Loss Y para proteger seu dinheiro.]
                 
-                *Ação Tática:* [Máximo 15 palavras justificando a ação baseada no cruzamento de tempos]
+                *Por que entrar?* [Explique em 1 frase muito simples e fácil de entender o porquê da operação]
                 """
                 
-                prompt_final = f"DADOS:\n{dados_matematicos}\nMACRO:\n{macro_info}\nPERF:\n{perf['texto']}\nHORARIO ATUAL: {hora_atual}"
+                prompt_final = f"MOEDA: {ativo_para_ler}\nDADOS:\n{dados_matematicos}\nMACRO:\n{macro_info}\nPERF:\n{perf['texto']}\nHORARIO ATUAL: {hora_atual}"
                 
                 try:
                     resposta = groq_client.chat.completions.create(
                         model="llama-3.3-70b-versatile",
                         messages=[{"role": "system", "content": inst_auto}, {"role": "user", "content": prompt_final}],
-                        temperature=0.1, max_tokens=256
+                        temperature=0.1, max_tokens=350
                     ).choices[0].message.content
                     
-                    # SALVANDO A RESPOSTA NO HISTÓRICO ANTES DE ATUALIZAR A PÁGINA (A CORREÇÃO DO BUG)
+                    # SALVANDO A RESPOSTA NO HISTÓRICO ANTES DE ATUALIZAR A PÁGINA
                     st.session_state.messages.append({"role": "assistant", "content": f"**[🤖 MODO AUTOMÁTICO - {hora_atual}]**\n\n{resposta}"})
                     
                     st.session_state.last_op_id = str(uuid.uuid4())
@@ -605,24 +609,30 @@ else:
                         dados_macro_str = "Sem dados quantitativos hoje."
                         noticias_hoje = "Sentimento atual cego."
 
-                    # NOVO CONTEXTO DA IA: Scalping
+                    # =========================================================
+                    # ATUALIZAÇÃO 2: PROMPT DO MODO MANUAL BEM MASTIGADO
+                    # =========================================================
                     instrucao_nexus_manual = """
-                    Você é o NEXUS QUANTUM VANGUARD (Sistema de Scalping Algorítmico).
-                    FORMATO MILITAR DIRETO (NÃO USE TEXTO GIGANTE, USE APENAS ### NO TÍTULO):
+                    Você é o Algoritmo Nexus.
+                    Sua missão é dar o sinal de forma EXTREMAMENTE FÁCIL, MASTIGADA E DIRETA, como se estivesse guiando um iniciante absoluto passo a passo. 
+                    Nada de jargões confusos. Diga exatamente onde clicar e quando fechar baseando-se na imagem.
                     
-                    ### [🟢 COMPRA / 🔴 VENDA / 🟡 AGUARDAR]
-                    **Nota:** [0/10]
-                    **Alvo:** [Preço] | **Stop Loss:** [Preço] | **DCA:** [Preço]
-                    **Horário Recomendado:** [Instrução sobre o tempo exato para entrar]
+                    FORMATO OBRIGATÓRIO (Siga exatamente este formato):
                     
-                    *Justificativa:* [Frase curta cruzando D1/H1/M5 e análise visual]
+                    ### [🟢 APERTE COMPRAR (Verde) / 🔴 APERTE VENDER (Vermelho) / 🟡 FIQUE DE FORA]
+                    **🪙 Moeda/Ativo:** [Nome da Moeda lida na imagem]
+                    **⏱️ Tempo Gráfico:** Coloque no M5 (Velas de 5 minutos)
+                    **🎯 O Que Fazer Agora:** [Ex: Vá na sua corretora AGORA e clique no botão de COMPRAR / VENDER]
+                    **🛑 Quando Fechar a Operação:** [Ex: Feche a operação manualmente assim que estiver no lucro no Alvo X, ou saia IMEDIATAMENTE se o preço for contra e bater no Stop Loss Y para proteger seu dinheiro.]
+                    
+                    *Por que entrar?* [Explique em 1 frase muito simples e fácil de entender o porquê da operação baseada na imagem]
                     """
                     final_prompt = f"MICRO VISUAL: {dados_visuais}\nMACRO: {dados_macro_str}\nNEWS: {noticias_hoje}\nPERF: {performance_nexus['texto']}\nCMD: {comando_usuario}"
 
                     resposta_nexus = groq_client.chat.completions.create(
                         model="llama-3.3-70b-versatile",
                         messages=[{"role": "system", "content": instrucao_nexus_manual}, {"role": "user", "content": final_prompt}],
-                        temperature=0.1, max_tokens=512
+                        temperature=0.1, max_tokens=350
                     ).choices[0].message.content
 
                     st.markdown(f"<div style='color: #00ff88; font-size: 0.8rem; margin-bottom: 15px;'><i>🔬 Processado em <b>{round(time.time() - start_time, 1)}s</b>.</i></div>", unsafe_allow_html=True)
