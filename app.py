@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import firebase_admin
 from firebase_admin import credentials, firestore
 import yfinance as yf
+import streamlit.components.v1 as components  # Adicionado para o Gráfico ao Vivo
 import re
 import uuid
 import pandas as pd
@@ -234,10 +235,60 @@ FORMATO OBRIGATÓRIO DE RESPOSTA:
 """
 
 # ==============================================================================
-# 6. INTERFACE DO CHAT E ESTADO DA SESSÃO
+# 5.5 MÓDULO DE MONITORAMENTO AO VIVO E HUB DE CORRETORA (NOVO)
 # ==============================================================================
 st.markdown('<div class="nexus-logo">NEXUS <span>QUANTUM</span></div>', unsafe_allow_html=True)
 
+with st.expander("📡 HUB DE MONITORAMENTO AO VIVO E CORRETORAS", expanded=False):
+    st.markdown("<p style='font-size:0.9rem; color:#e2e8f0;'>Acompanhe o mercado em tempo real e prepare a conexão via API para operações automáticas futuras.</p>", unsafe_allow_html=True)
+    
+    col_ativo, col_corretora = st.columns(2)
+    with col_ativo:
+        ativo_live = st.selectbox("Ativo para Monitorar:", ["BINANCE:BTCUSDT", "BINANCE:ETHUSDT", "FX:EURUSD", "OANDA:XAUUSD"])
+    with col_corretora:
+        corretora_selecionada = st.selectbox("Selecione sua Corretora:", ["Binance", "Bybit", "OKX", "B3 (Em breve)"])
+    
+    api_key_input = st.text_input("API Key (Leitura)", type="password", placeholder="Cole sua API Key aqui...")
+    
+    if st.button("SINCRONIZAR DADOS"):
+        st.toast(f"Conectando ao terminal {corretora_selecionada}...", icon="⚡")
+        time.sleep(1)
+        st.success("✅ Conexão Simulada Estabelecida. Gráfico e Scanner prontos.")
+
+    # Injeção do Gráfico Profissional do TradingView
+    html_grafico = f"""
+    <div class="tradingview-widget-container">
+      <div id="tradingview_nexus"></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+      <script type="text/javascript">
+      new TradingView.widget(
+      {{
+      "width": "100%",
+      "height": 400,
+      "symbol": "{ativo_live}",
+      "interval": "5",
+      "timezone": "Etc/UTC",
+      "theme": "dark",
+      "style": "1",
+      "locale": "br",
+      "enable_publishing": false,
+      "backgroundColor": "rgba(15, 23, 42, 0.7)",
+      "gridColor": "rgba(0, 255, 136, 0.05)",
+      "hide_top_toolbar": false,
+      "save_image": false,
+      "container_id": "tradingview_nexus"
+    }}
+      );
+      </script>
+    </div>
+    """
+    components.html(html_grafico, height=400)
+
+st.markdown("---")
+
+# ==============================================================================
+# 6. INTERFACE DO CHAT E ESTADO DA SESSÃO
+# ==============================================================================
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "last_op_id" not in st.session_state:
@@ -259,7 +310,7 @@ if uploaded_files:
 
 col_texto, col_btn = st.columns([8, 2], vertical_alignment="bottom")
 with col_texto:
-    prompt = st.text_input("", placeholder="Clique em Analisar ou cole regras institucionais...", label_visibility="collapsed")
+    prompt = st.text_input("", placeholder="Clique em Analisar ou cole regras...", label_visibility="collapsed")
 with col_btn:
     enviar = st.button("ANALISAR")
 
