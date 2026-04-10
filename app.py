@@ -10,6 +10,7 @@ import yfinance as yf
 import re
 import uuid
 import pandas as pd
+import random
 
 # ==============================================================================
 # 1. CONFIGURAÇÃO VISUAL E LUXUOSA DO SITE (Foco Mobile)
@@ -88,7 +89,7 @@ except Exception as e:
     st.stop()
 
 # ==============================================================================
-# 3. AUTO-ATUALIZAÇÃO QUÂNTICA (MACRO, SAZONALIDADE 5 ANOS E NOTÍCIAS)
+# 3. AUTO-ATUALIZAÇÃO QUÂNTICA (MACRO, SAZONALIDADE 5 ANOS, ATR E NOTÍCIAS)
 # ==============================================================================
 @st.cache_data(ttl=43200) 
 def atualizar_memoria_nexus_background():
@@ -108,10 +109,17 @@ def atualizar_memoria_nexus_background():
             total_dias = len(hist_mes)
             winrate_sazonal = (dias_green / total_dias * 100) if total_dias > 0 else 50
             
+            # Novo: Cálculo ATR 200 para Momentum
+            historico_5a['TR'] = historico_5a['High'] - historico_5a['Low']
+            atr_200 = float(historico_5a['TR'].tail(200).mean())
+
             noticias = ativo.news
             titulos_noticias = [n['title'] for n in noticias[:3]] if noticias else ["Nenhuma notícia relevante."]
             sentimento_bruto = " / ".join(titulos_noticias)
             
+            # Novo: Bias Institucional (Baleias)
+            bias_institucional = "ALTA" if any(x in sentimento_bruto.upper() for x in ["ETF", "SEC", "WHALE", "GOVERNMENT", "FED"]) else "NEUTRO"
+
             linha_hoje = historico_5a.iloc[-1]
             data_str = datetime.now().strftime('%Y-%m-%d')
             tendencia = "ALTA" if linha_hoje["Close"] > linha_hoje["Open"] else "BAIXA"
@@ -121,6 +129,8 @@ def atualizar_memoria_nexus_background():
                 "data": data_str,
                 "tendencia_diaria": tendencia,
                 "sazonalidade_mes": round(winrate_sazonal, 1),
+                "atr_200": atr_200,
+                "bias_whales": bias_institucional,
                 "abertura": float(linha_hoje["Open"]),
                 "fechamento": float(linha_hoje["Close"]),
                 "ultimas_noticias": sentimento_bruto 
@@ -133,20 +143,28 @@ def atualizar_memoria_nexus_background():
 atualizar_memoria_nexus_background()
 
 # ==============================================================================
-# 4. FUNÇÕES DE APRENDIZADO DO NEXUS (MEMÓRIA DE RESULTADOS)
+# 4. FUNÇÕES DE APRENDIZADO E SEGURANÇA (KILL SWITCH)
 # ==============================================================================
 def buscar_performance_nexus(ativo):
     try:
         docs = db.collection("resultados_nexus").where("ativo", "==", ativo).order_by("timestamp", direction=firestore.Query.DESCENDING).limit(10).get()
         if not docs: 
-            return "Sem histórico de operações recentes para este ativo."
+            return {"texto": "Sem histórico de operações recentes para este ativo.", "loss_sequence": 0, "wins": 0}
         
-        wins = sum(1 for d in docs if d.to_dict().get("resultado") == "WIN")
+        resultados = [d.to_dict().get("resultado") for d in docs]
+        wins = resultados.count("WIN")
         total = len(docs)
         taxa = (wins / total) * 100
-        return f"Nas últimas {total} operações de {ativo}, você teve {wins} WINs. (Taxa de acerto: {taxa:.0f}%)."
+        
+        # Conta perdas seguidas
+        loss_seq = 0
+        for r in resultados:
+            if r == "LOSS": loss_seq += 1
+            else: break
+            
+        return {"texto": f"Nas últimas {total} operações de {ativo}, você teve {wins} WINs. (Taxa de acerto: {taxa:.0f}%).", "loss_sequence": loss_seq, "wins": wins}
     except Exception as e:
-        return "Erro ao carregar memória de performance."
+        return {"texto": "Erro ao carregar memória de performance.", "loss_sequence": 0, "wins": 0}
 
 def salvar_resultado(id_op, ativo, resultado):
     db.collection("resultados_nexus").document(id_op).set({
@@ -165,57 +183,53 @@ def traduzir_nome_visual_para_ticker(nome_visual):
     return "BTC-USD"
 
 # ==============================================================================
-# 5. PROMPTS DE ELITE (INJEÇÃO DE TODAS AS ESTRATÉGIAS DOS VÍDEOS)
+# 5. PROMPTS DE ELITE (INJEÇÃO DE TODAS AS 11 ESTRATÉGIAS DOS VÍDEOS)
 # ==============================================================================
 instrucao_olhos = """
-Você é o Analista Visual de Elite do Nexus. Sua tarefa é analisar a imagem de trading de forma OBCECADA por detalhes técnicos.
+Você é o Analista Visual de Elite do Nexus. Sua tarefa é extrair o DNA institucional da imagem.
 
-REGRA ABSOLUTA 1: Identifique o ativo operado pelas abas iluminadas. Comece sua resposta EXATAMENTE com:
+REGRA ABSOLUTA 1: Identifique o ativo operado. Comece sua resposta EXATAMENTE com:
 ATIVO_IDENTIFICADO: [Nome do Ativo]
 
-REGRA ABSOLUTA 2: Extraia TODOS estes dados baseados em estratégias quantitativas:
-1. TEMPOS GRÁFICOS: Qual o tempo atual? (M5, M15). Existem outros visíveis na tela para confirmar a tendência (M30, H1, H4)?
-2. ZONAS DE SUPORTE E RESISTÊNCIA: Onde estão? CONTE OS TOQUES (ex: "Suporte em 1.0500 testado 3 vezes").
-3. LIQUIDITY SWEEPS (Varredura de Liquidez): Há pavios longos rompendo níveis importantes e voltando rápido?
-4. REGRA DOS TERÇOS (Daily Chore): A vela atual fechou no terço superior (força compradora) ou no terço inferior (força vendedora)? Ela está tocando em alguma EMA (Média Móvel)?
-5. INDICADORES ESPECÍFICOS:
-   - RSI ou Estocástico: Qual o valor? Está sobrecomprado ou sobrevendido?
-   - ADX: A linha vermelha está acima da azul (indicando volatilidade clara)?
-   - Indicadores de Tendência (estilo CCI Trader / God Hunter): Há linhas mudando de cor indicando reversão?
-   - ATR Bands: Existem bandas ATR visíveis na tela para definir o Stop Loss? Qual o valor delas?
+REGRA ABSOLUTA 2: Extraia TODOS estes dados quantitativos:
+1. TEMPOS GRÁFICOS: Qual o tempo atual? (M5 até H4).
+2. ZONAS DE SUPORTE E RESISTÊNCIA: Onde estão? CONTE OS TOQUES.
+3. LIQUIDITY SWEEPS E WHALES: Há pavios longos anormais (manipulação institucional)? 
+4. EVASÃO DE RUÍDO: O indicador está em linha PONTILHADA (Evasive Mode lateral)?
+5. REGRA DOS TERÇOS: A vela fechou no terço superior/inferior?
+6. INDICADORES ESPECÍFICOS: Valores de RSI, ADX e Bandas ATR.
+7. DIVERGÊNCIA: Há divergência entre preço e RSI?
+8. MOMENTUM: A vela atual é visivelmente maior que a média?
 """
 
 instrucao_nexus = """
-Você é o NEXUS QUANTUM, Inteligência Central de Guerra Financeira.
-Você funde Price Action (Imagem), Análise Multi-Timeframe, Sazonalidade Matemática (Banco), Sentimento (Notícias) e Feedback Próprio.
+Você é o NEXUS QUANTUM VANGUARD, Inteligência de Guerra Institucional.
+Você funde Price Action, Multi-Timeframe, Sazonalidade, Notícias, Rastros de Baleias e Feedback Próprio.
 
-REGRAS DE CONFLUÊNCIA DE OURO:
-1. ANÁLISE MULTI-TIMEFRAME: O M5 gera muito ruído. Exija que a tendência Macro (D1) e os tempos maiores (M30/H1) confirmem o sinal do M5. Se houver conflito, a ordem é AGUARDAR.
-2. SAZONALIDADE: Valorize a probabilidade histórica do mês e o Dia da Semana.
-3. FILTRO DE NOTÍCIAS: Pânico global nas notícias anula sinais técnicos de compra.
-4. GESTÃO DE RISCO: Use o ATR ou fundos/topos anteriores identificados pela Visão para posicionar o Stop Loss.
+REGRAS DE OURO DA EXECUÇÃO:
+1. ANÁLISE MULTI-TIMEFRAME: M5 e D1 devem concordar.
+2. SAZONALIDADE E WHALES: Se a notícia indicar atividade institucional, dobre a confiança.
+3. EVASÃO: Se o mercado estiver lateral (pontilhado), AGUARDE.
+4. GESTÃO DINÂMICA: Sugira sempre uma zona de Trailing Stop e pontos de DCA (Ladder).
 
 FORMATO OBRIGATÓRIO DE RESPOSTA:
-
-1. 🧬 RAIO-X QUÂNTICO E SENTIMENTO:
-   - Resuma a força histórica (Sazonalidade), o impacto das Notícias atuais e a sua Memória de Performance.
-2. 🔬 ANÁLISE MULTI-TIMEFRAME E TÉCNICA:
-   - Cruze o M5 com a tendência do Diário. Avalie os suportes (com número de toques), a regra dos terços da vela e os indicadores de volatilidade (ADX/RSI).
-3. 🎯 NOTA DE CONFLUÊNCIA:
-   - Dê uma nota final de 0 a 10 baseada no alinhamento de todos esses fatores. (Só opere se for 7 ou maior).
+1. 🧬 RAIO-X INSTITUCIONAL E SENTIMENTO:
+   - Sazonalidade, Impacto de Baleias/Notícias e Memória de Performance.
+2. 🔬 ANÁLISE TÉCNICA AVANÇADA:
+   - Cruzamento M5/D1, Evasão de Ruído, Divergências, Regra dos Terços.
+3. 🎲 CÁLCULO MONTE CARLO:
+   - Baseado na sua performance e nos dados acima, qual a % de chance de acerto dessa entrada?
+4. 🎯 NOTA DE CONFLUÊNCIA: [0 a 10]. (Só opere se for >= 7).
 
 ---
 ## 🎯 VEREDITO FINAL
-
 ### [EMOJI] ORDEM: **[COMPRA / VENDA / AGUARDAR]**
-**⏰ GATILHO DE ENTRADA:** Aguarde a vela fechar e entre no exato momento da abertura da próxima.
-**🎯 TAKE PROFIT:** [Alvo baseado em resistência/suporte] | **⛔ STOP LOSS:** [Baseado no ATR ou pavios longos de Liquidity Sweeps]
+**⏰ GATILHO DE ENTRADA:** Aguarde a vela fechar e entre na abertura da próxima.
+**🎯 ALVO TÉCNICO:** [Alvo baseado em 1:4 ou Resistência] 
+**📉 ZONA DE DCA:** [Onde recomprar se o preço cair um pouco]
+**📈 TRAILING STOP:** [Ponto para travar o lucro]
+**⛔ STOP LOSS:** [Baseado no ATR ou pavios longos de liquidez]
 **⚠️ RISCO:** [BAIXO / MÉDIO / ALTO]
-
-INSTRUÇÕES DE CORES:
-- COMPRA: 🟢 em negrito.
-- VENDA: 🔴 em negrito.
-- AGUARDAR: 🟡 em negrito.
 ---
 """
 
@@ -245,7 +259,7 @@ if uploaded_files:
 
 col_texto, col_btn = st.columns([8, 2], vertical_alignment="bottom")
 with col_texto:
-    prompt = st.text_input("", placeholder="Clique em Analisar ou cole um PineScript...", label_visibility="collapsed")
+    prompt = st.text_input("", placeholder="Clique em Analisar ou cole regras institucionais...", label_visibility="collapsed")
 with col_btn:
     enviar = st.button("ANALISAR")
 
@@ -253,7 +267,7 @@ with col_btn:
 # 7. O NÚCLEO DE PROCESSAMENTO QUÂNTICO (A MÁQUINA DE VERDADE)
 # ==============================================================================
 if enviar and uploaded_files:
-    comando_usuario = prompt if prompt else "Cruze a Sazonalidade, Notícias, Multi-Timeframe e Imagem. Calcule a Confluência."
+    comando_usuario = prompt if prompt else "Cruze dados Visuais, Sazonalidade, Notícias Institucionais e Multi-Timeframe."
     start_time = time.time()
     
     fuso_br = timezone(timedelta(hours=-3))
@@ -268,10 +282,10 @@ if enviar and uploaded_files:
         st.image(imagens_pil[0], width=200)
 
     with st.chat_message("assistant", avatar="💠"):
-        with st.spinner("NEXUS executando protocolo de Confluência Total..."):
+        with st.spinner("NEXUS executando protocolo de Confluência Total e Checagem Institucional..."):
             try:
                 # PASSO 1: A VISÃO
-                st.toast("Escaneando Indicadores e Liquidez...", icon="👁️")
+                st.toast("Escaneando Indicadores, Divergências e Liquidez...", icon="👁️")
                 vision_model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=instrucao_olhos)
                 vision_response = vision_model.generate_content(["Faça a varredura visual completa do ativo.", *imagens_pil])
                 dados_visuais = vision_response.text
@@ -284,8 +298,16 @@ if enviar and uploaded_files:
                 
                 ticker_alvo = traduzir_nome_visual_para_ticker(ativo_identificado_na_tela)
                 
-                # PASSO 3: BUSCA ESTATÍSTICA
-                st.toast("Acessando Algoritmos Sazonais e Sentiment...", icon="📰")
+                # PASSO 3: BUSCA DE PERFORMANCE E KILL SWITCH
+                st.toast("Carregando Rede Neural de Aprendizado e Kill Switch...", icon="🧠")
+                performance_nexus = buscar_performance_nexus(ticker_alvo)
+                
+                if performance_nexus["loss_sequence"] >= 5:
+                    st.error(f"🚨 PROTOCOLO DE DEFESA ATIVADO: Você teve {performance_nexus['loss_sequence']} perdas seguidas em {ativo_identificado_na_tela}. O sistema recomenda bloqueio de análises por 24h para evitar overtrading.")
+                    st.stop()
+
+                # PASSO 4: BUSCA ESTATÍSTICA E MACRO
+                st.toast("Acessando Algoritmos Sazonais e Sentiment de Baleias...", icon="📰")
                 data_hoje = agora.strftime('%Y-%m-%d')
                 doc_ref = db.collection("historico_macro").document(f"{ticker_alvo}_{data_hoje}")
                 doc = doc_ref.get()
@@ -298,34 +320,32 @@ if enviar and uploaded_files:
                     d = doc.to_dict()
                     winrate_sazonal = d.get('sazonalidade_mes', 50)
                     tend_diaria = d.get('tendencia_diaria', 'Desconhecida')
-                    dados_macro_str = f"Ativo: {ativo_identificado_na_tela} | Tendência Diária (D1): {tend_diaria} | Sazonalidade (5 anos): A taxa de acerto compradora deste ativo neste mês é de {winrate_sazonal}%."
+                    atr_mom = d.get('atr_200', 'Desconhecido')
+                    bias_w = d.get('bias_whales', 'NEUTRO')
+                    dados_macro_str = f"Ativo: {ativo_identificado_na_tela} | Tendência Diária (D1): {tend_diaria} | Sazonalidade: Taxa compradora neste mês é de {winrate_sazonal}%. | ATR 200: {atr_mom} | Bias Institucional: {bias_w}."
                     noticias_hoje = d.get('ultimas_noticias', 'Sem manchetes no radar.')
                 else:
                     dados_macro_str = f"Sem dados estatísticos quantitativos hoje para {ativo_identificado_na_tela}."
                     noticias_hoje = "Sentimento atual cego."
 
-                # PASSO 4: BUSCA DE PERFORMANCE
-                st.toast("Carregando Rede Neural de Aprendizado...", icon="🧠")
-                performance_nexus = buscar_performance_nexus(ticker_alvo)
-
                 # PASSO 5: O SUPER PROMPT DE ELITE
                 final_prompt = f"""
 [SISTEMA: Avaliação em Tempo Real. Hoje é {dia_hoje_str}].
 
-1. DADOS MICRO, INDICADORES E PRICE ACTION (LIDOS DA TELA):
+1. DADOS MICRO, SMC E PRICE ACTION (LIDOS DA TELA):
 {dados_visuais}
 
-2. MATEMÁTICA SAZONAL E MACRO TENDÊNCIA (5 ANOS DE DADOS):
+2. MATEMÁTICA SAZONAL, ATR E MACRO TENDÊNCIA (5 ANOS):
 {dados_macro_str}
 
-3. SENTIMENTO DE MERCADO E CALENDÁRIO ECONÔMICO:
+3. SENTIMENTO, BALEIAS E CALENDÁRIO ECONÔMICO:
 Notícias da API: "{noticias_hoje}"
 {alerta_calendario}
 
-4. MEMÓRIA DE PERFORMANCE DO NEXUS (SEU FEEDBACK):
-{performance_nexus}
+4. MEMÓRIA DE PERFORMANCE DO NEXUS:
+{performance_nexus["texto"]}
 
-COMANDO ADICIONAL DO USUÁRIO OU CÓDIGO PINESCRIPT: 
+COMANDO ADICIONAL DO USUÁRIO OU REGRAS INSTITUCIONAIS: 
 {comando_usuario}
 
 SINTETIZE A CONFLUÊNCIA DE TODOS ESTES FATORES E DÊ O VEREDITO.
@@ -343,7 +363,7 @@ SINTETIZE A CONFLUÊNCIA DE TODOS ESTES FATORES E DÊ O VEREDITO.
                 resposta_nexus = completion.choices[0].message.content
                 tempo_pensamento = round(time.time() - start_time, 1)
 
-                st.markdown(f"<div style='color: #00ff88; font-size: 0.8rem; margin-bottom: 15px;'><i>🔬 Confluência Quântica Multi-Dimensional processada em <b>{tempo_pensamento}s</b>.</i></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='color: #00ff88; font-size: 0.8rem; margin-bottom: 15px;'><i>🔬 Confluência Institucional processada em <b>{tempo_pensamento}s</b>.</i></div>", unsafe_allow_html=True)
                 st.markdown(resposta_nexus)
                 
                 st.session_state.messages.append({"role": "user", "content": f"Print enviado. {comando_usuario}"})
@@ -362,7 +382,7 @@ SINTETIZE A CONFLUÊNCIA DE TODOS ESTES FATORES E DÊ O VEREDITO.
     st.rerun()
 
 elif enviar and not uploaded_files:
-    st.warning("⚠️ Comandante, anexe um print da tela para ativar a Visão Quântica.")
+    st.warning("⚠️ Comandante, anexe um print da tela para ativar a Visão Institucional.")
 
 # ==============================================================================
 # 8. MÓDULO DE FEEDBACK E EVOLUÇÃO (CICLO DE APRENDIZADO)
