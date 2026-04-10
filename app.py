@@ -13,6 +13,7 @@ import uuid
 import pandas as pd
 import random
 import numpy as np
+import requests # <--- NOVA IMPORTAÇÃO PARA A API DA BINANCE
 
 # ==============================================================================
 # 1. CONFIGURAÇÃO VISUAL E LUXUOSA DO SITE (Foco Mobile)
@@ -188,10 +189,31 @@ def traduzir_nome_visual_para_ticker(nome_visual):
     return "BTC-USD"
 
 # ==============================================================================
-# 5. O CÉREBRO MATEMÁTICO MULTI-TIMEFRAME (BLINDADO CONTRA SPAM DO YFINANCE)
+# 5. MÓDULO HFT DA BINANCE (NOVA INTEGRAÇÃO) E O CÉREBRO MATEMÁTICO
 # ==============================================================================
-def processar_timeframe(df):
-    """Processa dados de OHLCV de forma segura usando NumPy"""
+def puxar_grafico_binance(simbolo="BTCUSDT", intervalo="5m", limite=100):
+    """Puxa o histórico de velas completo da Binance via API Pública"""
+    url = "https://api.binance.com/api/v3/klines"
+    parametros = {"symbol": simbolo, "interval": intervalo, "limit": limite}
+    
+    try:
+        resposta = requests.get(url, params=parametros, timeout=5)
+        dados = resposta.json()
+        
+        colunas = ['Tempo_Abertura', 'Open', 'High', 'Low', 'Close', 'Volume_Cripto',
+                   'Tempo_Fechamento', 'Volume_Financeiro', 'Numero_Trades',
+                   'Compra_Agressiva_Cripto', 'Compra_Agressiva_Financeiro', 'Ignorar']
+        
+        df = pd.DataFrame(dados, columns=colunas)
+        colunas_numericas = ['Open', 'High', 'Low', 'Close', 'Volume_Financeiro']
+        df[colunas_numericas] = df[colunas_numericas].astype(float)
+        
+        return df[['Open', 'High', 'Low', 'Close', 'Volume_Financeiro']]
+    except Exception as e:
+        return pd.DataFrame()
+
+def processar_timeframe(df, usa_volume_binance=False):
+    """Processa dados de OHLCV de forma segura usando NumPy. Agora com Sweep Avançado."""
     c = df['Close'].to_numpy()
     o = df['Open'].to_numpy()
     h = df['High'].to_numpy()
@@ -219,37 +241,81 @@ def processar_timeframe(df):
     p_sup = float(h[-1]) - max(float(o[-1]), float(c[-1]))
     p_inf = min(float(o[-1]), float(c[-1])) - float(l[-1])
 
-    sweep_alta = "SIM" if p_sup > (corpo * 2.5) else "NÃO"
-    sweep_baixa = "SIM" if p_inf > (corpo * 2.5) else "NÃO"
+    # === LÓGICA AVANÇADA DE SWEEP DE LIQUIDEZ ===
+    if usa_volume_binance and 'Volume_Financeiro' in df.columns:
+        v = df['Volume_Financeiro'].to_numpy()
+        vol_atual = v[-1]
+        # Calcula a média de volume das últimas 20 velas
+        avg_vol = np.mean(v[-20:]) if len(v) >= 20 else vol_atual
+
+        # Se o pavio é 2.5x o corpo E o volume foi 20% maior que a média: Absorção Institucional
+        if p_sup > (corpo * 2.5) and vol_atual > (avg_vol * 1.2):
+            sweep_alta = "SIM (ALTA LIQUIDEZ / ABSORÇÃO)"
+        elif p_sup > (corpo * 2.5):
+            sweep_alta = "SIM (Volume Normal)"
+        else:
+            sweep_alta = "NÃO"
+
+        if p_inf > (corpo * 2.5) and vol_atual > (avg_vol * 1.2):
+            sweep_baixa = "SIM (ALTA LIQUIDEZ / ABSORÇÃO)"
+        elif p_inf > (corpo * 2.5):
+            sweep_baixa = "SIM (Volume Normal)"
+        else:
+            sweep_baixa = "NÃO"
+    else:
+        # Lógica antiga para yfinance (Forex, etc) onde não temos o volume exato da Binance
+        sweep_alta = "SIM" if p_sup > (corpo * 2.5) else "NÃO"
+        sweep_baixa = "SIM" if p_inf > (corpo * 2.5) else "NÃO"
 
     return preco_atual, rsi_atual, tendencia, sweep_alta, sweep_baixa
 
 def ler_dados_mercado_ao_vivo_multi_tf(ticker):
     """
-    Lê M5, M30, H1 e D1 com pausas (time.sleep) para evitar bloqueio da API.
+    Roteador Inteligente: Usa Binance para Crypto (rápido, sem delay) e Yfinance para o resto.
     """
     try:
-        ativo = yf.Ticker(ticker)
-        
-        # Micro-pausas inseridas para evitar bloqueio por IP
-        df_m5 = ativo.history(period="3d", interval="5m")
-        time.sleep(0.5)
-        df_m30 = ativo.history(period="10d", interval="30m")
-        time.sleep(0.5)
-        df_h1 = ativo.history(period="20d", interval="1h")
-        time.sleep(0.5)
-        df_d1 = ativo.history(period="2mo", interval="1d")
+        # Verifica se é uma Criptomoeda para usar o endpoint HFT da Binance
+        if "BTC" in ticker or "ETH" in ticker:
+            simbolo_binance = ticker.replace("-USD", "USDT")
+            
+            df_m5 = puxar_grafico_binance(simbolo_binance, "5m", 100)
+            df_m30 = puxar_grafico_binance(simbolo_binance, "30m", 100)
+            df_h1 = puxar_grafico_binance(simbolo_binance, "1h", 100)
+            df_d1 = puxar_grafico_binance(simbolo_binance, "1d", 60)
+            
+            if df_m5.empty or df_m30.empty or df_h1.empty or df_d1.empty:
+                return "FALHA_DE_DADOS"
 
-        if df_m5.empty or df_m30.empty or df_h1.empty or df_d1.empty: 
-            return "FALHA_DE_DADOS"
+            p_m5, rsi_m5, t_m5, sa_m5, sb_m5 = processar_timeframe(df_m5, usa_volume_binance=True)
+            _, rsi_m30, t_m30, _, _ = processar_timeframe(df_m30, usa_volume_binance=True)
+            _, rsi_h1, t_h1, _, _ = processar_timeframe(df_h1, usa_volume_binance=True)
+            _, rsi_d1, t_d1, _, _ = processar_timeframe(df_d1, usa_volume_binance=True)
+            
+            origem_dados = "BINANCE API (HFT)"
 
-        p_m5, rsi_m5, t_m5, sa_m5, sb_m5 = processar_timeframe(df_m5)
-        _, rsi_m30, t_m30, _, _ = processar_timeframe(df_m30)
-        _, rsi_h1, t_h1, _, _ = processar_timeframe(df_h1)
-        _, rsi_d1, t_d1, _, _ = processar_timeframe(df_d1)
+        else:
+            # Fallback para o YFinance (Forex, Indices, etc) com micro-pausas
+            ativo = yf.Ticker(ticker)
+            df_m5 = ativo.history(period="3d", interval="5m")
+            time.sleep(0.5)
+            df_m30 = ativo.history(period="10d", interval="30m")
+            time.sleep(0.5)
+            df_h1 = ativo.history(period="20d", interval="1h")
+            time.sleep(0.5)
+            df_d1 = ativo.history(period="2mo", interval="1d")
+
+            if df_m5.empty or df_m30.empty or df_h1.empty or df_d1.empty: 
+                return "FALHA_DE_DADOS"
+
+            p_m5, rsi_m5, t_m5, sa_m5, sb_m5 = processar_timeframe(df_m5, usa_volume_binance=False)
+            _, rsi_m30, t_m30, _, _ = processar_timeframe(df_m30, usa_volume_binance=False)
+            _, rsi_h1, t_h1, _, _ = processar_timeframe(df_h1, usa_volume_binance=False)
+            _, rsi_d1, t_d1, _, _ = processar_timeframe(df_d1, usa_volume_binance=False)
+            
+            origem_dados = "YAHOO FINANCE"
 
         resumo_dados = f"""
-        * LEITURA MULTI-TIMEFRAME (D1, H1, M30, M5):
+        * LEITURA MULTI-TIMEFRAME ({origem_dados}):
         - Preço Atual: {p_m5:.4f}
         
         - TENDÊNCIA MACRO (D1): {t_d1} | RSI: {rsi_d1:.1f}
@@ -329,7 +395,7 @@ if auto_mode:
         fuso_br = timezone(timedelta(hours=-3))
         hora_atual = datetime.now(fuso_br).strftime('%H:%M:%S')
 
-        # TENTA LER OS DADOS (Com delays internos para evitar ban)
+        # TENTA LER OS DADOS (Agora instantâneo para Crypto via Binance)
         dados_matematicos = ler_dados_mercado_ao_vivo_multi_tf(ativo_para_ler)
         perf = buscar_performance_nexus(ativo_para_ler)
         
@@ -351,6 +417,7 @@ if auto_mode:
             1. Só recomende COMPRA se H1 e M30 estiverem em ALTA, e o M5 tiver RSI baixo ou Sweep.
             2. Só recomende VENDA se H1 e M30 estiverem em BAIXA, e o M5 tiver RSI alto ou Sweep.
             3. Se não houver alinhamento H1/M30/M5, a ordem é AGUARDAR.
+            4. Se o Sweep relatar "ALTA LIQUIDEZ / ABSORÇÃO", de extrema importância a este sinal.
 
             FORMATO OBRIGATÓRIO (NÃO USE TEXTO GRANDE, USE APENAS ### PARA O TÍTULO PRINCIPAL):
             
