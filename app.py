@@ -7,13 +7,13 @@ from datetime import datetime, timedelta, timezone
 import firebase_admin
 from firebase_admin import credentials, firestore
 import yfinance as yf
-import streamlit.components.v1 as components  
+import streamlit.components.v1 as components
 import re
 import uuid
 import pandas as pd
 import random
 import numpy as np
-import requests # <--- NOVA IMPORTAÇÃO PARA A API DA BINANCE
+import requests
 
 # ==============================================================================
 # 1. CONFIGURAÇÃO VISUAL E LUXUOSA DO SITE (Foco Mobile)
@@ -189,18 +189,15 @@ def traduzir_nome_visual_para_ticker(nome_visual):
     return "BTC-USD"
 
 # ==============================================================================
-# 5. MÓDULO HFT DA BINANCE (NOVA INTEGRAÇÃO) E O CÉREBRO MATEMÁTICO
+# 5. MÓDULO HFT DA BINANCE E O CÉREBRO MATEMÁTICO
 # ==============================================================================
-
-# ---> NOVA FUNÇÃO DETETIVE INSERIDA AQUI <---
 def puxar_grafico_binance(simbolo="BTCUSDT", intervalo="5m", limite=100):
-    url = "https://api.binance.us/api/v3/klines" # <-- ALTERADO PARA .US
+    url = "https://api.binance.us/api/v3/klines"
     parametros = {"symbol": simbolo, "interval": intervalo, "limit": limite}
     
     try:
         resposta = requests.get(url, params=parametros, timeout=5)
         
-        # Verifica se a Binance rejeitou o pedido (ex: moeda não existe ou IP bloqueado)
         if resposta.status_code != 200:
             st.error(f"Erro API Binance: Código {resposta.status_code} - Detalhe: {resposta.text}") 
             return pd.DataFrame()
@@ -216,19 +213,15 @@ def puxar_grafico_binance(simbolo="BTCUSDT", intervalo="5m", limite=100):
         
         return df[['Open', 'High', 'Low', 'Close', 'Volume_Financeiro']]
     except Exception as e:
-        # Se a biblioteca requests falhar ou a internet cair, avisa aqui:
         st.error(f"Erro Técnico no Nexus (Requests falhou): {e}")
         return pd.DataFrame()
-# ----------------------------------------------
 
 def processar_timeframe(df, usa_volume_binance=False):
-    """Processa dados de OHLCV de forma segura usando NumPy. Agora com Sweep Avançado."""
     c = df['Close'].to_numpy()
     o = df['Open'].to_numpy()
     h = df['High'].to_numpy()
     l = df['Low'].to_numpy()
 
-    # RSI Seguro
     delta = np.diff(c)
     gain = np.where(delta > 0, delta, 0)
     loss = np.where(delta < 0, -delta, 0)
@@ -250,14 +243,11 @@ def processar_timeframe(df, usa_volume_binance=False):
     p_sup = float(h[-1]) - max(float(o[-1]), float(c[-1]))
     p_inf = min(float(o[-1]), float(c[-1])) - float(l[-1])
 
-    # === LÓGICA AVANÇADA DE SWEEP DE LIQUIDEZ ===
     if usa_volume_binance and 'Volume_Financeiro' in df.columns:
         v = df['Volume_Financeiro'].to_numpy()
         vol_atual = v[-1]
-        # Calcula a média de volume das últimas 20 velas
         avg_vol = np.mean(v[-20:]) if len(v) >= 20 else vol_atual
 
-        # Se o pavio é 2.5x o corpo E o volume foi 20% maior que a média: Absorção Institucional
         if p_sup > (corpo * 2.5) and vol_atual > (avg_vol * 1.2):
             sweep_alta = "SIM (ALTA LIQUIDEZ / ABSORÇÃO)"
         elif p_sup > (corpo * 2.5):
@@ -272,18 +262,13 @@ def processar_timeframe(df, usa_volume_binance=False):
         else:
             sweep_baixa = "NÃO"
     else:
-        # Lógica antiga para yfinance (Forex, etc) onde não temos o volume exato da Binance
         sweep_alta = "SIM" if p_sup > (corpo * 2.5) else "NÃO"
         sweep_baixa = "SIM" if p_inf > (corpo * 2.5) else "NÃO"
 
     return preco_atual, rsi_atual, tendencia, sweep_alta, sweep_baixa
 
 def ler_dados_mercado_ao_vivo_multi_tf(ticker):
-    """
-    Roteador Inteligente: Usa Binance para Crypto (rápido, sem delay) e Yfinance para o resto.
-    """
     try:
-        # Verifica se é uma Criptomoeda para usar o endpoint HFT da Binance
         if "BTC" in ticker or "ETH" in ticker:
             simbolo_binance = ticker.replace("-USD", "USDT")
             
@@ -303,7 +288,6 @@ def ler_dados_mercado_ao_vivo_multi_tf(ticker):
             origem_dados = "BINANCE API (HFT)"
 
         else:
-            # Fallback para o YFinance (Forex, Indices, etc) com micro-pausas
             ativo = yf.Ticker(ticker)
             df_m5 = ativo.history(period="3d", interval="5m")
             time.sleep(0.5)
@@ -380,7 +364,7 @@ components.html(html_grafico, height=450)
 st.markdown("---")
 
 # ==============================================================================
-# 6. O PILOTO AUTOMÁTICO (LEITURA 24/7) E CHAT MANUAL
+# 6. O PILOTO AUTOMÁTICO E CHAT MANUAL
 # ==============================================================================
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -404,7 +388,6 @@ if auto_mode:
         fuso_br = timezone(timedelta(hours=-3))
         hora_atual = datetime.now(fuso_br).strftime('%H:%M:%S')
 
-        # TENTA LER OS DADOS (Agora instantâneo para Crypto via Binance)
         dados_matematicos = ler_dados_mercado_ao_vivo_multi_tf(ativo_para_ler)
         perf = buscar_performance_nexus(ativo_para_ler)
         
@@ -413,7 +396,7 @@ if auto_mode:
             st.stop()
             
         if "FALHA_DE_DADOS" in dados_matematicos:
-             st.error("⚠️ O servidor do provedor limitou as requisições (Anti-Spam). O Nexus aguardará o próximo ciclo para tentar novamente.")
+             st.error("⚠️ O servidor limitou as requisições (Anti-Spam). O Nexus aguardará o próximo ciclo para tentar novamente.")
         else:
             doc = db.collection("historico_macro").document(f"{ativo_para_ler}_{datetime.now().strftime('%Y-%m-%d')}").get()
             macro_info = doc.to_dict() if doc.exists else "Macro Indisponível"
@@ -426,7 +409,7 @@ if auto_mode:
             1. Só recomende COMPRA se H1 e M30 estiverem em ALTA, e o M5 tiver RSI baixo ou Sweep.
             2. Só recomende VENDA se H1 e M30 estiverem em BAIXA, e o M5 tiver RSI alto ou Sweep.
             3. Se não houver alinhamento H1/M30/M5, a ordem é AGUARDAR.
-            4. Se o Sweep relatar "ALTA LIQUIDEZ / ABSORÇÃO", de extrema importância a este sinal.
+            4. Se o Sweep relatar "ALTA LIQUIDEZ / ABSORÇÃO", dê extrema importância a este sinal.
 
             FORMATO OBRIGATÓRIO (NÃO USE TEXTO GRANDE, USE APENAS ### PARA O TÍTULO PRINCIPAL):
             
@@ -453,7 +436,6 @@ if auto_mode:
             except Exception as e:
                 st.error(f"Erro no Processador Quântico IA: {e}")
             
-        # O CRONÔMETRO VISUAL 
         st.markdown("---")
         status_text = st.empty()
         progress_bar = st.progress(0.0)
@@ -465,8 +447,6 @@ if auto_mode:
             
         status_text.empty()
         progress_bar.empty()
-        
-        # COMANDO CORRIGIDO: Força o reload oficial da página após o cronômetro zerar
         st.rerun()
 
 else:
@@ -487,7 +467,7 @@ else:
         enviar = st.button("ANALISAR")
 
     if enviar and uploaded_files:
-        comando_usuario = prompt if prompt else "Cruze dados Visuais, Sazonalidade, Notícias Institucionais e Multi-Timeframe."
+        comando_usuario = prompt if prompt else "Cruze dados Visuais, Sazonalidade, Notícias Institucionais e Multi-Timeframe. Diga o melhor horário de entrada."
         start_time = time.time()
         
         fuso_br = timezone(timedelta(hours=-3))
@@ -495,7 +475,12 @@ else:
         dias_da_semana = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
         dia_hoje_str = dias_da_semana[agora.weekday()]
         
-        imagens_pil = [Image.open(f) for f in uploaded_files]
+        # OTIMIZAÇÃO APLICADA AQUI: Reduzindo o peso do print para não estourar a cota do Gemini!
+        imagens_pil = []
+        for f in uploaded_files:
+            img = Image.open(f)
+            img.thumbnail((1024, 1024)) # Compressor Quântico: diminui a resolução da imagem enviada
+            imagens_pil.append(img)
 
         with st.chat_message("user", avatar="🧑‍💻"):
             st.markdown(f"**Comando:** {comando_usuario}")
@@ -504,7 +489,7 @@ else:
         with st.chat_message("assistant", avatar="💠"):
             with st.spinner("NEXUS executando protocolo de Confluência Total..."):
                 try:
-                    st.toast("Escaneando Indicadores...", icon="👁️")
+                    st.toast("Escaneando Indicadores Visuais...", icon="👁️")
                     instrucao_olhos = """
                     Você é o Analista Visual de Elite do Nexus.
                     REGRA 1: Identifique ATIVO_IDENTIFICADO: [Nome do Ativo].
@@ -526,8 +511,6 @@ else:
 
                     data_hoje = agora.strftime('%Y-%m-%d')
                     doc = db.collection("historico_macro").document(f"{ticker_alvo}_{data_hoje}").get()
-                    
-                    alerta_calendario = "⚠️ PAYROLL HOJE." if agora.weekday() == 4 and agora.day <= 7 else ""
 
                     if doc.exists:
                         d = doc.to_dict()
@@ -544,10 +527,11 @@ else:
                     ### [🟢 COMPRA / 🔴 VENDA / 🟡 AGUARDAR]
                     **Nota:** [0/10]
                     **Alvo:** [Preço] | **Stop Loss:** [Preço] | **DCA:** [Preço]
+                    **Horário Recomendado:** [Instrução sobre o tempo exato para entrar]
                     
-                    *Justificativa:* [Frase curta cruzando D1/H1/M5]
+                    *Justificativa:* [Frase curta cruzando D1/H1/M5 e análise visual]
                     """
-                    final_prompt = f"MICRO: {dados_visuais}\nMACRO: {dados_macro_str}\nNEWS: {noticias_hoje}\nPERF: {performance_nexus['texto']}\nCMD: {comando_usuario}"
+                    final_prompt = f"MICRO VISUAL: {dados_visuais}\nMACRO: {dados_macro_str}\nNEWS: {noticias_hoje}\nPERF: {performance_nexus['texto']}\nCMD: {comando_usuario}"
 
                     resposta_nexus = groq_client.chat.completions.create(
                         model="llama-3.3-70b-versatile",
@@ -565,8 +549,24 @@ else:
                     st.session_state.last_ativo = ticker_alvo
 
                 except Exception as e:
-                    st.error(f"🚨 ALERTA DO SISTEMA: {e}")
-                    st.stop()
+                    # TRATAMENTO DE ERRO DE COTA DO GOOGLE COM CRONÔMETRO VISUAL:
+                    if "429" in str(e) or "Quota exceeded" in str(e):
+                        st.warning("⚠️ Limite de requisições do Gemini (Plano Gratuito) atingido. Ativando protocolo de resfriamento para recarregar a cota...")
+                        
+                        cooldown_placeholder = st.empty()
+                        cooldown_bar = st.progress(0.0)
+                        
+                        for sec in range(60, 0, -1):
+                            cooldown_placeholder.info(f"⏳ Recarregando conexão com o servidor. Liberação em: **{sec} segundos**")
+                            cooldown_bar.progress((60 - sec) / 60)
+                            time.sleep(1)
+                            
+                        cooldown_placeholder.success("✅ Cota recarregada! Você já pode clicar no botão 'ANALISAR' novamente.")
+                        cooldown_bar.empty()
+                        st.stop()
+                    else:
+                        st.error(f"🚨 ALERTA DO SISTEMA: {e}")
+                        st.stop()
         
         st.rerun()
 
