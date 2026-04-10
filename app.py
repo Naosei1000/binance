@@ -8,11 +8,12 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import yfinance as yf
 import re
+import uuid
 
 # ==============================================================================
 # 1. CONFIGURAÇÃO VISUAL E LUXUOSA DO SITE (Foco Mobile)
 # ==============================================================================
-st.set_page_config(page_title="NEXUS SUPREMO - FASE 2", page_icon="💠", layout="centered")
+st.set_page_config(page_title="NEXUS SUPREMO - FINAL", page_icon="💠", layout="centered")
 
 st.markdown("""
 <style>
@@ -33,25 +34,16 @@ st.markdown("""
     [data-testid="StyledFullScreenButton"] {display: none;}
     
     .nexus-logo {
-        text-align: center;
-        font-size: 2.8rem;
-        font-weight: 800;
-        letter-spacing: 8px;
-        margin-top: -3rem;
-        margin-bottom: 1rem;
+        text-align: center; font-size: 2.8rem; font-weight: 800; letter-spacing: 8px;
+        margin-top: -3rem; margin-bottom: 1rem;
         background: linear-gradient(to right, #4facfe 0%, #00f2fe 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         animation: pulse 2.5s infinite;
         text-shadow: 0px 0px 15px rgba(0, 242, 254, 0.2);
     }
     .nexus-logo span {
-        font-size: 1.2rem;
-        letter-spacing: 3px;
-        color: #e2e8f0;
-        -webkit-text-fill-color: #e2e8f0;
-        vertical-align: middle;
-        margin-left: 5px;
+        font-size: 1.2rem; letter-spacing: 3px; color: #e2e8f0;
+        -webkit-text-fill-color: #e2e8f0; vertical-align: middle; margin-left: 5px;
     }
     @keyframes pulse {
         0% { opacity: 0.8; text-shadow: 0px 0px 15px rgba(0, 242, 254, 0.2); }
@@ -62,19 +54,14 @@ st.markdown("""
         background-color: rgba(15, 23, 42, 0.7) !important;
         border: 1px solid rgba(0, 242, 254, 0.15) !important;
         border-radius: 16px !important;
-        padding: 1.2rem !important;
-        margin-bottom: 1rem !important;
+        padding: 1.2rem !important; margin-bottom: 1rem !important;
         box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
     }
     .stButton > button {
         background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%);
-        color: white;
-        border: 1px solid rgba(0, 242, 254, 0.3) !important;
-        border-radius: 8px !important; 
-        height: 100%;
-        width: 100%;
-        font-weight: 700;
-        transition: all 0.3s ease;
+        color: white; border: 1px solid rgba(0, 242, 254, 0.3) !important;
+        border-radius: 8px !important; height: 100%; width: 100%;
+        font-weight: 700; transition: all 0.3s ease;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -100,22 +87,19 @@ except Exception as e:
     st.stop()
 
 # ==============================================================================
-# 3. AUTO-ATUALIZAÇÃO DE DADOS MACRO E NOTÍCIAS (O "OUVIDO" DO MERCADO)
+# 3. AUTO-ATUALIZAÇÃO DE DADOS MACRO E NOTÍCIAS
 # ==============================================================================
-@st.cache_data(ttl=43200) # Roda a cada 12 horas
+@st.cache_data(ttl=43200) 
 def atualizar_memoria_nexus_background():
-    """Baixa silenciosamente os dados e busca as últimas notícias."""
     try:
         moedas_macro = ["BTC-USD", "ETH-USD", "EURUSD=X", "GC=F", "^AXJO"] 
         for ticker in moedas_macro:
             ativo = yf.Ticker(ticker)
             historico = ativo.history(period="1mo") 
             
-            # --- NOVO: BUSCA DE SENTIMENTO/NOTÍCIAS ---
             noticias = ativo.news
             titulos_noticias = [n['title'] for n in noticias[:3]] if noticias else ["Nenhuma notícia relevante."]
             sentimento_bruto = " / ".join(titulos_noticias)
-            # ----------------------------------------
             
             for data_index, linha in historico.iterrows():
                 data_str = data_index.strftime('%Y-%m-%d')
@@ -130,7 +114,7 @@ def atualizar_memoria_nexus_background():
                     "fechamento": float(linha["Close"]),
                     "maxima": float(linha["High"]),
                     "minima": float(linha["Low"]),
-                    "ultimas_noticias": sentimento_bruto # Salva a manchete no banco
+                    "ultimas_noticias": sentimento_bruto 
                 }
                 db.collection("historico_macro").document(id_unico).set(dados_macro)
         return True
@@ -140,7 +124,32 @@ def atualizar_memoria_nexus_background():
 atualizar_memoria_nexus_background()
 
 # ==============================================================================
-# 4. PERSONAS E REGRAS DE OURO
+# 4. FUNÇÕES DE APRENDIZADO DO NEXUS (MEMÓRIA DE RESULTADOS)
+# ==============================================================================
+def buscar_performance_nexus(ativo):
+    """Busca o histórico de acertos do Nexus para este ativo."""
+    try:
+        docs = db.collection("resultados_nexus").where("ativo", "==", ativo).order_by("timestamp", direction=firestore.Query.DESCENDING).limit(10).get()
+        if not docs: 
+            return "Sem histórico de operações recentes para este ativo."
+        
+        wins = sum(1 for d in docs if d.to_dict().get("resultado") == "WIN")
+        total = len(docs)
+        taxa = (wins / total) * 100
+        return f"Nas últimas {total} operações de {ativo}, você teve {wins} WINs. (Taxa de acerto: {taxa:.0f}%)."
+    except Exception as e:
+        return "Erro ao carregar memória de performance."
+
+def salvar_resultado(id_op, ativo, resultado):
+    """Salva se a operação deu WIN ou LOSS."""
+    db.collection("resultados_nexus").document(id_op).set({
+        "ativo": ativo, 
+        "resultado": resultado, 
+        "timestamp": firestore.SERVER_TIMESTAMP
+    })
+
+# ==============================================================================
+# 5. PERSONAS E REGRAS DE OURO
 # ==============================================================================
 instrucao_olhos = """
 Você é o Analista Visual de Elite do Nexus.
@@ -158,35 +167,33 @@ Após identificar o ativo, descreva ABSOLUTAMENTE TUDO:
 - Tendência micro (o que está acontecendo nas últimas velas).
 - Padrões de vela visíveis (Martelo, Engolfo, Doji).
 - Zonas de Suporte e Resistência visíveis.
-- Valores máximos e mínimos marcados na tela.
-Entregue o máximo de informações técnicas possível.
 """
 
 instrucao_nexus = """
-Você é o Nexus, Inteligência Central de Guerra Financeira.
-Sua análise cruza 3 pilares: MICRO (Imagem), MACRO (Banco de Dados) e SENTIMENTO (Notícias/Calendário).
+Você é o NEXUS SUPREMO, a IA de trading com consciência de aprendizado.
+Sua análise cruza 4 pilares: MICRO (Imagem), MACRO (Banco), SENTIMENTO (Notícias) e sua PERFORMANCE (Seu histórico de acertos).
 
-REGRAS DE OURO DA NOVA BLINDAGEM:
-1. Se as NOTÍCIAS indicarem turbulência global, pânico ou crise, o risco da operação é sempre ALTO, mesmo que o gráfico esteja bonito. Considere ordenar AGUARDAR.
-2. Se o Macro (Diário) for contra o Micro (M5), não hesite em ordenar AGUARDAR.
+REGRAS DE OURO:
+1. Se as NOTÍCIAS indicarem turbulência global, o risco é ALTO.
+2. Se a sua PERFORMANCE recente neste ativo for muito ruim (Muitos LOSS), você deve ser extremamente cauteloso ou ordenar AGUARDAR.
 
 FORMATO OBRIGATÓRIO DE RESPOSTA:
-1. Comece com "⚡ ALERTA MACRO:" e comente brevemente se as notícias atuais afetam o ativo.
-2. Faça sua análise técnica rápida (Micro vs Macro).
+1. Comece com "🧠 CONSCIÊNCIA NEXUS:" e comente sobre seu histórico de acertos e o impacto das notícias do dia.
+2. Faça sua análise técnica rápida cruzando Micro e Macro.
 3. Finalize OBRIGATORIAMENTE com o bloco abaixo:
 
 ---
 ## 🎯 VEREDITO FINAL
 
 ### [EMOJI] ORDEM: **[AÇÃO]**
-**⏰ GATILHO DE ENTRADA:** Aguarde o cronômetro da vela atual chegar a 00:00. Entre no exato milissegundo em que a próxima vela nascer.
+**⏰ GATILHO DE ENTRADA:** Aguarde o cronômetro chegar a 00:00 e entre na virada da vela.
 **🎯 TAXA ALVO:** [Valor do Preço]
 **⚠️ RISCO:** [BAIXO / MÉDIO / ALTO]
 
-INSTRUÇÕES DE CORES E AÇÃO:
-- Se for COMPRA: Use o emoji 🟢 e escreva COMPRA em negrito.
-- Se for VENDA: Use o emoji 🔴 e escreva VENDA em negrito.
-- Se for AGUARDAR: Use o emoji 🟡 e escreva AGUARDAR em negrito.
+INSTRUÇÕES:
+- COMPRA: 🟢 em negrito.
+- VENDA: 🔴 em negrito.
+- AGUARDAR: 🟡 em negrito.
 ---
 """
 
@@ -200,12 +207,16 @@ def traduzir_nome_visual_para_ticker(nome_visual):
     return "BTC-USD"
 
 # ==============================================================================
-# 5. TÍTULO E INTERFACE DO CHAT 
+# 6. INTERFACE DO CHAT E ESTADO DA SESSÃO
 # ==============================================================================
-st.markdown('<div class="nexus-logo">NEXUS <span>FASE 2</span></div>', unsafe_allow_html=True)
+st.markdown('<div class="nexus-logo">NEXUS <span>SUPREMO</span></div>', unsafe_allow_html=True)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "last_op_id" not in st.session_state:
+    st.session_state.last_op_id = None
+if "last_ativo" not in st.session_state:
+    st.session_state.last_ativo = None
 
 for message in st.session_state.messages:
     if message["role"] != "system":
@@ -226,10 +237,10 @@ with col_btn:
     enviar = st.button("ANALISAR")
 
 # ==============================================================================
-# 6. O CÉREBRO: MICRO + MACRO + SENTIMENTO
+# 7. O CÉREBRO: O PROCESSAMENTO COMPLETO
 # ==============================================================================
 if enviar and uploaded_files:
-    comando_usuario = prompt if prompt else "Cruze os dados da imagem com as notícias e dê o veredito."
+    comando_usuario = prompt if prompt else "Cruze os dados da imagem com as notícias e seu histórico de acertos."
     start_time = time.time()
     fuso_br = timezone(timedelta(hours=-3))
     agora = datetime.now(fuso_br)
@@ -241,7 +252,7 @@ if enviar and uploaded_files:
         st.image(imagens_pil[0], width=200)
 
     with st.chat_message("assistant", avatar="💠"):
-        with st.spinner("NEXUS lendo Imagem, Banco de Dados e Notícias Globais..."):
+        with st.spinner("NEXUS lendo Imagem, Banco de Dados, Notícias e Memória..."):
             try:
                 # PASSO 1: A VISÃO
                 st.toast("Escaneando Print...", icon="👁️")
@@ -249,7 +260,7 @@ if enviar and uploaded_files:
                 vision_response = vision_model.generate_content(["Extraia tudo.", *imagens_pil])
                 dados_visuais = vision_response.text
 
-                # PASSO 2: IDENTIFICAÇÃO E BANCO
+                # PASSO 2: IDENTIFICAÇÃO DO ATIVO
                 ativo_identificado_na_tela = "Desconhecido"
                 match = re.search(r'ATIVO_IDENTIFICADO:\s*(.+)', dados_visuais, re.IGNORECASE)
                 if match:
@@ -257,17 +268,16 @@ if enviar and uploaded_files:
                 
                 ticker_alvo = traduzir_nome_visual_para_ticker(ativo_identificado_na_tela)
                 
+                # PASSO 3: BUSCA DE MACRO, NOTÍCIAS E CALENDÁRIO
                 st.toast("Acessando Banco e Sentimento...", icon="📰")
                 data_hoje = agora.strftime('%Y-%m-%d')
                 doc_ref = db.collection("historico_macro").document(f"{ticker_alvo}_{data_hoje}")
                 doc = doc_ref.get()
                 
-                # --- NOVO: GERADOR DE CALENDÁRIO ECONÔMICO BÁSICO (Simulado para o Prompt) ---
                 dia_semana = agora.weekday()
                 alerta_calendario = ""
-                if dia_semana == 4 and agora.day <= 7: # Primeira sexta-feira do mês (Payroll)
-                    alerta_calendario = "ALERTA DE CALENDÁRIO: Hoje é dia de PAYROLL (NFP). Volatilidade extrema. Evite operar se faltar menos de 1 hora para as 09:30 (NY Time)."
-                # -----------------------------------------------------------------------------
+                if dia_semana == 4 and agora.day <= 7: 
+                    alerta_calendario = "ALERTA DE CALENDÁRIO: Hoje é dia de PAYROLL (NFP). Volatilidade extrema."
 
                 if doc.exists:
                     d = doc.to_dict()
@@ -277,7 +287,11 @@ if enviar and uploaded_files:
                     dados_macro_str = f"Sem dados Macro hoje para {ativo_identificado_na_tela}."
                     noticias_hoje = "Sem leitura de sentimento atual."
 
-                # PASSO 3: O NOVO SUPER PROMPT
+                # PASSO 4: BUSCA DE PERFORMANCE (MEMÓRIA DO NEXUS)
+                st.toast("Consultando Histórico de Acertos...", icon="🧠")
+                performance_nexus = buscar_performance_nexus(ticker_alvo)
+
+                # PASSO 5: O SUPER PROMPT DE ELITE
                 final_prompt = f"""
 [SISTEMA: Análise em tempo real].
 
@@ -287,14 +301,15 @@ if enviar and uploaded_files:
 2. DADOS MACRO (BANCO DE DADOS NEXUS):
 {dados_macro_str}
 
-3. SENTIMENTO DE MERCADO E NOTÍCIAS (MUNDO REAL):
-Manchetes atuais lidas pela API sobre este ativo: "{noticias_hoje}"
+3. SENTIMENTO DE MERCADO E NOTÍCIAS:
+Manchetes atuais: "{noticias_hoje}"
 {alerta_calendario}
 
-COMANDO DO COMANDANTE: {comando_usuario}
-Cruze os 3 pilares agora e dê o veredito blindado.
+4. MEMÓRIA DE PERFORMANCE DO NEXUS:
+{performance_nexus}
+
+COMANDO: {comando_usuario}
 """
-                
                 historico_para_groq = [{"role": "system", "content": instrucao_nexus}]
                 historico_para_groq.append({"role": "user", "content": final_prompt})
 
@@ -308,14 +323,17 @@ Cruze os 3 pilares agora e dê o veredito blindado.
                 resposta_nexus = completion.choices[0].message.content
                 tempo_pensamento = round(time.time() - start_time, 1)
 
-                st.markdown(f"<div style='color: #00f2fe; font-size: 0.8rem; margin-bottom: 15px;'><i>🧠 Visão + Macro + Notícias processados em <b>{tempo_pensamento}s</b>.</i></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='color: #00f2fe; font-size: 0.8rem; margin-bottom: 15px;'><i>🧠 Análise Global processada em <b>{tempo_pensamento}s</b>.</i></div>", unsafe_allow_html=True)
                 st.markdown(resposta_nexus)
                 
                 st.session_state.messages.append({"role": "user", "content": f"Print enviado. {comando_usuario}"})
                 st.session_state.messages.append({"role": "assistant", "content": resposta_nexus})
+                
+                # REGISTRA A OPERAÇÃO PARA RECEBER O FEEDBACK DEPOIS
+                st.session_state.last_op_id = str(uuid.uuid4())
+                st.session_state.last_ativo = ticker_alvo
 
             except Exception as e:
-                # SE CAIR NO ERRO 429 DE NOVO, ELE TE AVISA COM CALMA AGORA!
                 mensagem_erro = str(e).lower()
                 if "429" in mensagem_erro or "quota" in mensagem_erro:
                      st.error("⏳ ALERTA DE VELOCIDADE: O Google Gemini (Visão) pediu para você esperar cerca de 1 minuto antes do próximo print. O plano gratuito protege contra muitas fotos seguidas. Beba uma água e aperte Analisar de novo!")
@@ -326,3 +344,26 @@ Cruze os 3 pilares agora e dê o veredito blindado.
 
 elif enviar and not uploaded_files:
     st.warning("⚠️ Comandante, anexe um print da tela para o Nexus analisar.")
+
+# ==============================================================================
+# 8. MÓDULO DE FEEDBACK (O NEXUS APRENDE AQUI)
+# ==============================================================================
+if st.session_state.last_op_id:
+    st.markdown("---")
+    st.markdown("<h4 style='text-align: center; color: #e2e8f0;'>Qual foi o resultado da operação?</h4>", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🟢 DEU WIN!", key="btn_win"):
+            salvar_resultado(st.session_state.last_op_id, st.session_state.last_ativo, "WIN")
+            st.toast("✅ Boa, Comandante! O Nexus salvou esse cenário como vitorioso.", icon="🟢")
+            st.session_state.last_op_id = None
+            time.sleep(2)
+            st.rerun()
+    with col2:
+        if st.button("🔴 DEU LOSS", key="btn_loss"):
+            salvar_resultado(st.session_state.last_op_id, st.session_state.last_ativo, "LOSS")
+            st.toast("❌ Entendido. O Nexus será mais cauteloso nesse ativo na próxima vez.", icon="🔴")
+            st.session_state.last_op_id = None
+            time.sleep(2)
+            st.rerun()
