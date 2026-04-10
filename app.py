@@ -7,11 +7,12 @@ from datetime import datetime, timedelta, timezone
 import firebase_admin
 from firebase_admin import credentials, firestore
 import yfinance as yf
-import streamlit.components.v1 as components  # Adicionado para o Gráfico ao Vivo
+import streamlit.components.v1 as components  
 import re
 import uuid
 import pandas as pd
 import random
+import numpy as np
 
 # ==============================================================================
 # 1. CONFIGURAÇÃO VISUAL E LUXUOSA DO SITE (Foco Mobile)
@@ -66,6 +67,7 @@ st.markdown("""
         border-radius: 8px !important; height: 100%; width: 100%;
         font-weight: 700; transition: all 0.3s ease;
     }
+    .stToggle { margin-bottom: 1rem; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -110,7 +112,7 @@ def atualizar_memoria_nexus_background():
             total_dias = len(hist_mes)
             winrate_sazonal = (dias_green / total_dias * 100) if total_dias > 0 else 50
             
-            # Novo: Cálculo ATR 200 para Momentum
+            # Cálculo ATR 200 para Momentum
             historico_5a['TR'] = historico_5a['High'] - historico_5a['Low']
             atr_200 = float(historico_5a['TR'].tail(200).mean())
 
@@ -118,7 +120,7 @@ def atualizar_memoria_nexus_background():
             titulos_noticias = [n['title'] for n in noticias[:3]] if noticias else ["Nenhuma notícia relevante."]
             sentimento_bruto = " / ".join(titulos_noticias)
             
-            # Novo: Bias Institucional (Baleias)
+            # Bias Institucional (Baleias)
             bias_institucional = "ALTA" if any(x in sentimento_bruto.upper() for x in ["ETF", "SEC", "WHALE", "GOVERNMENT", "FED"]) else "NEUTRO"
 
             linha_hoje = historico_5a.iloc[-1]
@@ -184,63 +186,59 @@ def traduzir_nome_visual_para_ticker(nome_visual):
     return "BTC-USD"
 
 # ==============================================================================
-# 5. PROMPTS DE ELITE (INJEÇÃO DE TODAS AS 11 ESTRATÉGIAS DOS VÍDEOS)
+# 5. O LEITOR MATEMÁTICO AO VIVO (O CÉREBRO AUTÔNOMO)
 # ==============================================================================
-instrucao_olhos = """
-Você é o Analista Visual de Elite do Nexus. Sua tarefa é extrair o DNA institucional da imagem.
-
-REGRA ABSOLUTA 1: Identifique o ativo operado. Comece sua resposta EXATAMENTE com:
-ATIVO_IDENTIFICADO: [Nome do Ativo]
-
-REGRA ABSOLUTA 2: Extraia TODOS estes dados quantitativos:
-1. TEMPOS GRÁFICOS: Qual o tempo atual? (M5 até H4).
-2. ZONAS DE SUPORTE E RESISTÊNCIA: Onde estão? CONTE OS TOQUES.
-3. LIQUIDITY SWEEPS E WHALES: Há pavios longos anormais (manipulação institucional)? 
-4. EVASÃO DE RUÍDO: O indicador está em linha PONTILHADA (Evasive Mode lateral)?
-5. REGRA DOS TERÇOS: A vela fechou no terço superior/inferior?
-6. INDICADORES ESPECÍFICOS: Valores de RSI, ADX e Bandas ATR.
-7. DIVERGÊNCIA: Há divergência entre preço e RSI?
-8. MOMENTUM: A vela atual é visivelmente maior que a média?
-"""
-
-instrucao_nexus = """
-Você é o NEXUS QUANTUM VANGUARD, Inteligência de Guerra Institucional.
-Você funde Price Action, Multi-Timeframe, Sazonalidade, Notícias, Rastros de Baleias e Feedback Próprio.
-
-REGRAS DE OURO DA EXECUÇÃO:
-1. ANÁLISE MULTI-TIMEFRAME: M5 e D1 devem concordar.
-2. SAZONALIDADE E WHALES: Se a notícia indicar atividade institucional, dobre a confiança.
-3. EVASÃO: Se o mercado estiver lateral (pontilhado), AGUARDE.
-4. GESTÃO DINÂMICA: Sugira sempre uma zona de Trailing Stop e pontos de DCA (Ladder).
-
-FORMATO OBRIGATÓRIO DE RESPOSTA:
-1. 🧬 RAIO-X INSTITUCIONAL E SENTIMENTO:
-   - Sazonalidade, Impacto de Baleias/Notícias e Memória de Performance.
-2. 🔬 ANÁLISE TÉCNICA AVANÇADA:
-   - Cruzamento M5/D1, Evasão de Ruído, Divergências, Regra dos Terços.
-3. 🎲 CÁLCULO MONTE CARLO:
-   - Baseado na sua performance e nos dados acima, qual a % de chance de acerto dessa entrada?
-4. 🎯 NOTA DE CONFLUÊNCIA: [0 a 10]. (Só opere se for >= 7).
-
----
-## 🎯 VEREDITO FINAL
-### [EMOJI] ORDEM: **[COMPRA / VENDA / AGUARDAR]**
-**⏰ GATILHO DE ENTRADA:** Aguarde a vela fechar e entre na abertura da próxima.
-**🎯 ALVO TÉCNICO:** [Alvo baseado em 1:4 ou Resistência] 
-**📉 ZONA DE DCA:** [Onde recomprar se o preço cair um pouco]
-**📈 TRAILING STOP:** [Ponto para travar o lucro]
-**⛔ STOP LOSS:** [Baseado no ATR ou pavios longos de liquidez]
-**⚠️ RISCO:** [BAIXO / MÉDIO / ALTO]
----
-"""
+def ler_dados_mercado_ao_vivo(ticker):
+    """
+    Função crítica que lê as velas reais via código, calcula RSI, Médias e Pavios.
+    O Nexus usa isso para analisar o mercado automaticamente sem precisar de print.
+    """
+    try:
+        df = yf.download(ticker, period="5d", interval="5m", progress=False)
+        if df.empty: return "Falha ao puxar dados da corretora via API."
+        
+        # Calcula RSI 14
+        delta = df['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        df['RSI'] = 100 - (100 / (1 + rs))
+        
+        # Calcula EMA
+        df['EMA_9'] = df['Close'].ewm(span=9, adjust=False).mean()
+        df['EMA_21'] = df['Close'].ewm(span=21, adjust=False).mean()
+        
+        # Análise de Preço da Última Vela
+        vela_atual = df.tail(3).iloc[-1]
+        
+        corpo = abs(vela_atual['Close'] - vela_atual['Open'])
+        pavio_sup = float(vela_atual['High']) - max(float(vela_atual['Open']), float(vela_atual['Close']))
+        pavio_inf = min(float(vela_atual['Open']), float(vela_atual['Close'])) - float(vela_atual['Low'])
+        
+        sweep_baixa = "SIM (Manipulação para Varejo)" if pavio_inf > (corpo * 2.5) else "NÃO"
+        sweep_alta = "SIM (Manipulação para Varejo)" if pavio_sup > (corpo * 2.5) else "NÃO"
+        
+        tendencia_micro = "ALTA" if vela_atual['EMA_9'].iloc[0] > vela_atual['EMA_21'].iloc[0] else "BAIXA"
+        
+        resumo_dados = f"""
+        * STATUS MATEMÁTICO DO M5 AGORA:
+        - Preço: {float(vela_atual['Close']):.4f}
+        - RSI: {float(vela_atual['RSI']):.2f}
+        - Tendência EMA: {tendencia_micro}
+        - Liquidity Sweep Inferior (Stops): {sweep_baixa}
+        - Liquidity Sweep Superior (Stops): {sweep_alta}
+        """
+        return resumo_dados
+    except Exception as e:
+        return f"Erro na leitura matemática HFT: {e}"
 
 # ==============================================================================
-# 5.5 MÓDULO DE MONITORAMENTO AO VIVO E HUB DE CORRETORA (NOVO)
+# 5.5 HUB DE MONITORAMENTO AO VIVO E CORRETORAS
 # ==============================================================================
 st.markdown('<div class="nexus-logo">NEXUS <span>QUANTUM</span></div>', unsafe_allow_html=True)
 
 with st.expander("📡 HUB DE MONITORAMENTO AO VIVO E CORRETORAS", expanded=False):
-    st.markdown("<p style='font-size:0.9rem; color:#e2e8f0;'>Acompanhe o mercado em tempo real e prepare a conexão via API para operações automáticas futuras.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:0.9rem; color:#e2e8f0;'>Conexão de dados da corretora. O gráfico abaixo é em tempo real.</p>", unsafe_allow_html=True)
     
     col_ativo, col_corretora = st.columns(2)
     with col_ativo:
@@ -255,7 +253,7 @@ with st.expander("📡 HUB DE MONITORAMENTO AO VIVO E CORRETORAS", expanded=Fals
         time.sleep(1)
         st.success("✅ Conexão Simulada Estabelecida. Gráfico e Scanner prontos.")
 
-    # Injeção do Gráfico Profissional do TradingView
+    # Gráfico do TradingView para o usuário visualizar
     html_grafico = f"""
     <div class="tradingview-widget-container">
       <div id="tradingview_nexus"></div>
@@ -287,7 +285,7 @@ with st.expander("📡 HUB DE MONITORAMENTO AO VIVO E CORRETORAS", expanded=Fals
 st.markdown("---")
 
 # ==============================================================================
-# 6. INTERFACE DO CHAT E ESTADO DA SESSÃO
+# 6. O PILOTO AUTOMÁTICO (LEITURA 24/7 SEM PRINT) E CHAT MANUAL
 # ==============================================================================
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -296,147 +294,175 @@ if "last_op_id" not in st.session_state:
 if "last_ativo" not in st.session_state:
     st.session_state.last_ativo = None
 
-for message in st.session_state.messages:
-    if message["role"] != "system":
-        icone_avatar = "🧑‍💻" if message["role"] == "user" else "💠"
-        with st.chat_message(message["role"], avatar=icone_avatar):
-            st.markdown(message["content"])
+auto_mode = st.toggle("🟢 ATIVAR PILOTO AUTOMÁTICO (NEXUS LÊ O GRÁFICO SOZINHO)")
+container_log = st.empty()
 
-with st.popover("🖼️ Anexar Print do Gráfico"):
-    uploaded_files = st.file_uploader("Fotos", type=["png", "jpg", "jpeg"], accept_multiple_files=True, label_visibility="collapsed")
+if auto_mode:
+    # --- MODO 1: O ROBÔ LÊ O MERCADO SOZINHO VIA DADOS (VÍDEOS 9, 10, 11) ---
+    with container_log.container():
+        st.warning("📡 SCANNER ATIVADO: O Nexus está puxando a fita de preços da corretora...")
+        
+        ativo_para_ler = "BTC-USD" if "BTC" in ativo_live else "ETH-USD"
+        if "EUR" in ativo_live: ativo_para_ler = "EURUSD=X"
+        if "XAU" in ativo_live: ativo_para_ler = "GC=F"
+        
+        # Puxa os dados da corretora
+        dados_matematicos = ler_dados_mercado_ao_vivo(ativo_para_ler)
+        
+        # Verifica a segurança (Kill Switch)
+        perf = buscar_performance_nexus(ativo_para_ler)
+        if perf["loss_sequence"] >= 5:
+            st.error("🚨 KILL SWITCH ATIVADO: 5 Perdas Seguidas. Piloto Automático Desligado por segurança.")
+            st.stop()
+            
+        doc = db.collection("historico_macro").document(f"{ativo_para_ler}_{datetime.now().strftime('%Y-%m-%d')}").get()
+        macro_info = doc.to_dict() if doc.exists else "Macro Indisponível"
+        
+        # O prompt Autônomo Institucional
+        inst_auto = """
+        Você é o NEXUS QUANTUM AUTÔNOMO. Você opera lendo dados matemáticos puros (OHLCV).
+        CRITÉRIOS:
+        1. Se RSI < 30 e Sweep Inferior detectado = COMPRA FORTE.
+        2. Se RSI > 70 e Sweep Superior detectado = VENDA FORTE.
+        3. Se a Tendência Micro for contra a Diária = AGUARDAR.
+        
+        RESPONDA:
+        1. 🔬 LEITURA QUÂNTICA AO VIVO: (Análise dos dados matemáticos M5).
+        2. 🐋 BIAS INSTITUCIONAL: (Sazonalidade e Notícias).
+        3. 🎯 NOTA DE OPORTUNIDADE: [0/10].
+        
+        ## 🎯 SINAL DO ALGORITMO
+        ORDEM: [COMPRA / VENDA / AGUARDAR NOVA VELA]
+        ALVO: [Sugerir 1:4] | STOP: [Atrás do Liquidity Sweep]
+        LADDER (DCA): [Ponto de Recompra se cair]
+        """
+        
+        prompt_final = f"DADOS DA CORRETORA (M5):\n{dados_matematicos}\nMACRO/SAZONAL:\n{macro_info}\nPERFORMANCE:\n{perf['texto']}"
+        
+        try:
+            resposta = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "system", "content": inst_auto}, {"role": "user", "content": prompt_final}],
+                temperature=0.1, max_tokens=1024
+            ).choices[0].message.content
+            
+            st.success("✅ Varredura Concluída com Sucesso!")
+            st.markdown(resposta)
+            
+            st.session_state.last_op_id = str(uuid.uuid4())
+            st.session_state.last_ativo = ativo_para_ler
+            
+        except Exception as e:
+            st.error(f"Erro na IA: {e}")
+            
+        st.info("⏳ O Nexus está aguardando o fechamento da próxima vela para ler o gráfico novamente (Cooldown de 60s)...")
+        time.sleep(60) 
+        st.rerun()
 
-if uploaded_files:
-    st.markdown("<div style='font-size: 0.85rem; color: #00ff88; margin-bottom: 5px;'>✔️ Print Carregado. Pronto para a Varredura.</div>", unsafe_allow_html=True)
+else:
+    # --- MODO 2: O MODO ORIGINAL (USUÁRIO MANDA O PRINT) ---
+    for message in st.session_state.messages:
+        if message["role"] != "system":
+            icone_avatar = "🧑‍💻" if message["role"] == "user" else "💠"
+            with st.chat_message(message["role"], avatar=icone_avatar):
+                st.markdown(message["content"])
 
-col_texto, col_btn = st.columns([8, 2], vertical_alignment="bottom")
-with col_texto:
-    prompt = st.text_input("", placeholder="Clique em Analisar ou cole regras...", label_visibility="collapsed")
-with col_btn:
-    enviar = st.button("ANALISAR")
+    with st.popover("🖼️ Anexar Print do Gráfico"):
+        uploaded_files = st.file_uploader("Fotos", type=["png", "jpg", "jpeg"], accept_multiple_files=True, label_visibility="collapsed")
 
-# ==============================================================================
-# 7. O NÚCLEO DE PROCESSAMENTO QUÂNTICO (A MÁQUINA DE VERDADE)
-# ==============================================================================
-if enviar and uploaded_files:
-    comando_usuario = prompt if prompt else "Cruze dados Visuais, Sazonalidade, Notícias Institucionais e Multi-Timeframe."
-    start_time = time.time()
-    
-    fuso_br = timezone(timedelta(hours=-3))
-    agora = datetime.now(fuso_br)
-    dias_da_semana = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
-    dia_hoje_str = dias_da_semana[agora.weekday()]
-    
-    imagens_pil = [Image.open(f) for f in uploaded_files]
+    if uploaded_files:
+        st.markdown("<div style='font-size: 0.85rem; color: #00ff88; margin-bottom: 5px;'>✔️ Print Carregado. Pronto para a Varredura.</div>", unsafe_allow_html=True)
 
-    with st.chat_message("user", avatar="🧑‍💻"):
-        st.markdown(f"**Comando:** {comando_usuario}")
-        st.image(imagens_pil[0], width=200)
+    col_texto, col_btn = st.columns([8, 2], vertical_alignment="bottom")
+    with col_texto:
+        prompt = st.text_input("", placeholder="Clique em Analisar ou cole regras institucionais...", label_visibility="collapsed")
+    with col_btn:
+        enviar = st.button("ANALISAR")
 
-    with st.chat_message("assistant", avatar="💠"):
-        with st.spinner("NEXUS executando protocolo de Confluência Total e Checagem Institucional..."):
-            try:
-                # PASSO 1: A VISÃO
-                st.toast("Escaneando Indicadores, Divergências e Liquidez...", icon="👁️")
-                vision_model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=instrucao_olhos)
-                vision_response = vision_model.generate_content(["Faça a varredura visual completa do ativo.", *imagens_pil])
-                dados_visuais = vision_response.text
+    if enviar and uploaded_files:
+        comando_usuario = prompt if prompt else "Cruze dados Visuais, Sazonalidade, Notícias Institucionais e Multi-Timeframe."
+        start_time = time.time()
+        
+        fuso_br = timezone(timedelta(hours=-3))
+        agora = datetime.now(fuso_br)
+        dias_da_semana = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
+        dia_hoje_str = dias_da_semana[agora.weekday()]
+        
+        imagens_pil = [Image.open(f) for f in uploaded_files]
 
-                # PASSO 2: IDENTIFICAÇÃO DO ATIVO
-                ativo_identificado_na_tela = "Desconhecido"
-                match = re.search(r'ATIVO_IDENTIFICADO:\s*(.+)', dados_visuais, re.IGNORECASE)
-                if match:
-                    ativo_identificado_na_tela = match.group(1).strip()
-                
-                ticker_alvo = traduzir_nome_visual_para_ticker(ativo_identificado_na_tela)
-                
-                # PASSO 3: BUSCA DE PERFORMANCE E KILL SWITCH
-                st.toast("Carregando Rede Neural de Aprendizado e Kill Switch...", icon="🧠")
-                performance_nexus = buscar_performance_nexus(ticker_alvo)
-                
-                if performance_nexus["loss_sequence"] >= 5:
-                    st.error(f"🚨 PROTOCOLO DE DEFESA ATIVADO: Você teve {performance_nexus['loss_sequence']} perdas seguidas em {ativo_identificado_na_tela}. O sistema recomenda bloqueio de análises por 24h para evitar overtrading.")
+        with st.chat_message("user", avatar="🧑‍💻"):
+            st.markdown(f"**Comando:** {comando_usuario}")
+            st.image(imagens_pil[0], width=200)
+
+        with st.chat_message("assistant", avatar="💠"):
+            with st.spinner("NEXUS executando protocolo de Confluência Total e Checagem Institucional..."):
+                try:
+                    st.toast("Escaneando Indicadores, Divergências e Liquidez...", icon="👁️")
+                    instrucao_olhos = """
+                    Você é o Analista Visual de Elite do Nexus.
+                    REGRA 1: Identifique ATIVO_IDENTIFICADO: [Nome do Ativo].
+                    REGRA 2: Extraia Liquidity Sweeps, Regra dos Terços, Suportes e RSI.
+                    """
+                    vision_model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=instrucao_olhos)
+                    dados_visuais = vision_model.generate_content(["Faça a varredura visual completa do ativo.", *imagens_pil]).text
+
+                    match = re.search(r'ATIVO_IDENTIFICADO:\s*(.+)', dados_visuais, re.IGNORECASE)
+                    ativo_identificado_na_tela = match.group(1).strip() if match else "Desconhecido"
+                    ticker_alvo = traduzir_nome_visual_para_ticker(ativo_identificado_na_tela)
+                    
+                    st.toast("Carregando Rede Neural de Aprendizado e Kill Switch...", icon="🧠")
+                    performance_nexus = buscar_performance_nexus(ticker_alvo)
+                    
+                    if performance_nexus["loss_sequence"] >= 5:
+                        st.error(f"🚨 PROTOCOLO DE DEFESA ATIVADO: 5 perdas seguidas em {ativo_identificado_na_tela}. Bloqueio de 24h.")
+                        st.stop()
+
+                    st.toast("Acessando Algoritmos Sazonais e Sentiment de Baleias...", icon="📰")
+                    data_hoje = agora.strftime('%Y-%m-%d')
+                    doc = db.collection("historico_macro").document(f"{ticker_alvo}_{data_hoje}").get()
+                    
+                    alerta_calendario = "⚠️ PAYROLL HOJE." if agora.weekday() == 4 and agora.day <= 7 else ""
+
+                    if doc.exists:
+                        d = doc.to_dict()
+                        dados_macro_str = f"Ativo: {ativo_identificado_na_tela} | Tendência Diária (D1): {d.get('tendencia_diaria')} | Sazonalidade: {d.get('sazonalidade_mes')}%. | ATR 200: {d.get('atr_200')} | Bias Institucional: {d.get('bias_whales')}."
+                        noticias_hoje = d.get('ultimas_noticias', 'Sem manchetes no radar.')
+                    else:
+                        dados_macro_str = "Sem dados quantitativos hoje."
+                        noticias_hoje = "Sentimento atual cego."
+
+                    instrucao_nexus = """
+                    Você é o NEXUS QUANTUM VANGUARD.
+                    FORMATO: 1. RAIO-X INSTITUCIONAL. 2. ANÁLISE TÉCNICA. 3. NOTA DE CONFLUÊNCIA.
+                    VEREDITO: ORDEM, ALVO, ZONA DCA, TRAILING STOP, STOP LOSS.
+                    """
+                    final_prompt = f"MICRO: {dados_visuais}\nMACRO: {dados_macro_str}\nNEWS: {noticias_hoje}\nPERF: {performance_nexus['texto']}\nCMD: {comando_usuario}"
+
+                    resposta_nexus = groq_client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=[{"role": "system", "content": instrucao_nexus}, {"role": "user", "content": final_prompt}],
+                        temperature=0.1, max_tokens=1024
+                    ).choices[0].message.content
+
+                    st.markdown(f"<div style='color: #00ff88; font-size: 0.8rem; margin-bottom: 15px;'><i>🔬 Confluência Institucional processada em <b>{round(time.time() - start_time, 1)}s</b>.</i></div>", unsafe_allow_html=True)
+                    st.markdown(resposta_nexus)
+                    
+                    st.session_state.messages.append({"role": "user", "content": f"Print enviado. {comando_usuario}"})
+                    st.session_state.messages.append({"role": "assistant", "content": resposta_nexus})
+                    
+                    st.session_state.last_op_id = str(uuid.uuid4())
+                    st.session_state.last_ativo = ticker_alvo
+
+                except Exception as e:
+                    st.error(f"🚨 ALERTA DO SISTEMA: {e}")
                     st.stop()
+        st.rerun()
 
-                # PASSO 4: BUSCA ESTATÍSTICA E MACRO
-                st.toast("Acessando Algoritmos Sazonais e Sentiment de Baleias...", icon="📰")
-                data_hoje = agora.strftime('%Y-%m-%d')
-                doc_ref = db.collection("historico_macro").document(f"{ticker_alvo}_{data_hoje}")
-                doc = doc_ref.get()
-                
-                alerta_calendario = ""
-                if agora.weekday() == 4 and agora.day <= 7: 
-                    alerta_calendario = "⚠️ ALERTA: Hoje é dia de PAYROLL (NFP). O mercado sofre manipulação pesada institucional (Liquidity Sweeps). Risco Extremo."
-
-                if doc.exists:
-                    d = doc.to_dict()
-                    winrate_sazonal = d.get('sazonalidade_mes', 50)
-                    tend_diaria = d.get('tendencia_diaria', 'Desconhecida')
-                    atr_mom = d.get('atr_200', 'Desconhecido')
-                    bias_w = d.get('bias_whales', 'NEUTRO')
-                    dados_macro_str = f"Ativo: {ativo_identificado_na_tela} | Tendência Diária (D1): {tend_diaria} | Sazonalidade: Taxa compradora neste mês é de {winrate_sazonal}%. | ATR 200: {atr_mom} | Bias Institucional: {bias_w}."
-                    noticias_hoje = d.get('ultimas_noticias', 'Sem manchetes no radar.')
-                else:
-                    dados_macro_str = f"Sem dados estatísticos quantitativos hoje para {ativo_identificado_na_tela}."
-                    noticias_hoje = "Sentimento atual cego."
-
-                # PASSO 5: O SUPER PROMPT DE ELITE
-                final_prompt = f"""
-[SISTEMA: Avaliação em Tempo Real. Hoje é {dia_hoje_str}].
-
-1. DADOS MICRO, SMC E PRICE ACTION (LIDOS DA TELA):
-{dados_visuais}
-
-2. MATEMÁTICA SAZONAL, ATR E MACRO TENDÊNCIA (5 ANOS):
-{dados_macro_str}
-
-3. SENTIMENTO, BALEIAS E CALENDÁRIO ECONÔMICO:
-Notícias da API: "{noticias_hoje}"
-{alerta_calendario}
-
-4. MEMÓRIA DE PERFORMANCE DO NEXUS:
-{performance_nexus["texto"]}
-
-COMANDO ADICIONAL DO USUÁRIO OU REGRAS INSTITUCIONAIS: 
-{comando_usuario}
-
-SINTETIZE A CONFLUÊNCIA DE TODOS ESTES FATORES E DÊ O VEREDITO.
-"""
-                historico_para_groq = [{"role": "system", "content": instrucao_nexus}]
-                historico_para_groq.append({"role": "user", "content": final_prompt})
-
-                completion = groq_client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=historico_para_groq,
-                    temperature=0.1, 
-                    max_tokens=1024
-                )
-
-                resposta_nexus = completion.choices[0].message.content
-                tempo_pensamento = round(time.time() - start_time, 1)
-
-                st.markdown(f"<div style='color: #00ff88; font-size: 0.8rem; margin-bottom: 15px;'><i>🔬 Confluência Institucional processada em <b>{tempo_pensamento}s</b>.</i></div>", unsafe_allow_html=True)
-                st.markdown(resposta_nexus)
-                
-                st.session_state.messages.append({"role": "user", "content": f"Print enviado. {comando_usuario}"})
-                st.session_state.messages.append({"role": "assistant", "content": resposta_nexus})
-                
-                st.session_state.last_op_id = str(uuid.uuid4())
-                st.session_state.last_ativo = ticker_alvo
-
-            except Exception as e:
-                mensagem_erro = str(e).lower()
-                if "429" in mensagem_erro or "quota" in mensagem_erro:
-                     st.error("⏳ ALERTA DE QUOTA: Motores aquecidos demais. Aguarde 60 segundos antes de enviar outra imagem para evitar bloqueio do plano gratuito.")
-                else:
-                     st.error(f"🚨 ALERTA DO SISTEMA: {e}")
-                st.stop()
-    st.rerun()
-
-elif enviar and not uploaded_files:
-    st.warning("⚠️ Comandante, anexe um print da tela para ativar a Visão Institucional.")
+    elif enviar and not uploaded_files:
+        st.warning("⚠️ Comandante, anexe um print da tela para ativar a Visão Institucional.")
 
 # ==============================================================================
-# 8. MÓDULO DE FEEDBACK E EVOLUÇÃO (CICLO DE APRENDIZADO)
+# 9. MÓDULO DE FEEDBACK E EVOLUÇÃO (CICLO DE APRENDIZADO)
 # ==============================================================================
 if st.session_state.last_op_id:
     st.markdown("---")
