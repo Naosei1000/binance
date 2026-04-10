@@ -188,7 +188,7 @@ def traduzir_nome_visual_para_ticker(nome_visual):
     return "BTC-USD"
 
 # ==============================================================================
-# 5. O CÉREBRO MATEMÁTICO MULTI-TIMEFRAME (ANTI-BLOQUEIO YFINANCE)
+# 5. O CÉREBRO MATEMÁTICO MULTI-TIMEFRAME (BLINDADO CONTRA SPAM DO YFINANCE)
 # ==============================================================================
 def processar_timeframe(df):
     """Processa dados de OHLCV de forma segura usando NumPy"""
@@ -226,14 +226,18 @@ def processar_timeframe(df):
 
 def ler_dados_mercado_ao_vivo_multi_tf(ticker):
     """
-    Lê M5, M30, H1 e D1 usando método 'history' (Anti-Spam do Yahoo Finance)
+    Lê M5, M30, H1 e D1 com pausas (time.sleep) para evitar bloqueio da API.
     """
     try:
         ativo = yf.Ticker(ticker)
-        # Reduzindo o período para não ser bloqueado por excesso de dados
+        
+        # Micro-pausas inseridas para evitar bloqueio por IP
         df_m5 = ativo.history(period="3d", interval="5m")
+        time.sleep(0.5)
         df_m30 = ativo.history(period="10d", interval="30m")
+        time.sleep(0.5)
         df_h1 = ativo.history(period="20d", interval="1h")
+        time.sleep(0.5)
         df_d1 = ativo.history(period="2mo", interval="1d")
 
         if df_m5.empty or df_m30.empty or df_h1.empty or df_d1.empty: 
@@ -261,18 +265,24 @@ def ler_dados_mercado_ao_vivo_multi_tf(ticker):
         return "FALHA_DE_DADOS"
 
 # ==============================================================================
-# 5.5 GRÁFICO AO VIVO CENTRAL (SEMPRE VISÍVEL) E API DA CORRETORA
+# 5.5 HUB DE CORRETORAS E GRÁFICO AO VIVO CENTRAL (SEMPRE VISÍVEL)
 # ==============================================================================
 st.markdown('<div class="nexus-logo">NEXUS <span>QUANTUM</span></div>', unsafe_allow_html=True)
 
 st.markdown("### 📡 RADAR DE OPERAÇÕES E CORRETORA")
+
 col_ativo, col_corretora = st.columns(2)
 with col_ativo:
     ativo_live = st.selectbox("Ativo para Monitorar:", ["BINANCE:BTCUSDT", "BINANCE:ETHUSDT", "FX:EURUSD", "OANDA:XAUUSD"])
 with col_corretora:
-    corretora_selecionada = st.selectbox("Conectar Corretora Real (Via API):", ["Yahoo Finance (Gratuito - Padrão)", "Binance", "Bybit", "OKX"])
+    corretora_selecionada = st.selectbox("Conectar Corretora Real (Via API):", ["Yahoo Finance (Padrão/Gratuito)", "Binance", "Bybit", "OKX", "IQ Option"])
 
-api_key_input = st.text_input("Sua Chave API (Exigido apenas se usar Binance/Bybit/OKX)", type="password", placeholder="Insira a API Key da sua corretora...")
+api_key_input = st.text_input("Sua Chave API (Opcional - Requerido para operações reais futuras)", type="password", placeholder="Insira a API Key da sua corretora...")
+
+if st.button("SINCRONIZAR DADOS"):
+    st.toast(f"Conectando ao terminal {corretora_selecionada}...", icon="⚡")
+    time.sleep(1)
+    st.success("✅ Conexão Simulada Estabelecida. Gráfico e Scanner prontos para leitura.")
 
 simbolo_tv = ativo_live
 html_grafico = f"""
@@ -310,7 +320,7 @@ container_log = st.empty()
 if auto_mode:
     # --- MODO 1: O ROBÔ LÊ O MERCADO SOZINHO VIA DADOS (HFT MULTI-TIMEFRAME) ---
     with container_log.container():
-        st.warning("📡 SCANNER ATIVADO: Processando D1, H1, M30 e M5...")
+        st.warning("📡 SCANNER ATIVADO: Puxando histórico Multi-Timeframe da corretora...")
         
         ativo_para_ler = "BTC-USD" if "BTC" in ativo_live else "ETH-USD"
         if "EUR" in ativo_live: ativo_para_ler = "EURUSD=X"
@@ -319,7 +329,7 @@ if auto_mode:
         fuso_br = timezone(timedelta(hours=-3))
         hora_atual = datetime.now(fuso_br).strftime('%H:%M:%S')
 
-        # TENTA LER OS DADOS COM SISTEMA ANTI-FALHA
+        # TENTA LER OS DADOS (Com delays internos para evitar ban)
         dados_matematicos = ler_dados_mercado_ao_vivo_multi_tf(ativo_para_ler)
         perf = buscar_performance_nexus(ativo_para_ler)
         
@@ -328,42 +338,36 @@ if auto_mode:
             st.stop()
             
         if "FALHA_DE_DADOS" in dados_matematicos:
-             st.error("⚠️ Servidor de dados rejeitou a conexão por excesso de requisições. O Nexus vai tentar novamente no próximo ciclo.")
+             st.error("⚠️ O servidor do provedor limitou as requisições (Anti-Spam). O Nexus aguardará o próximo ciclo para tentar novamente.")
         else:
             doc = db.collection("historico_macro").document(f"{ativo_para_ler}_{datetime.now().strftime('%Y-%m-%d')}").get()
             macro_info = doc.to_dict() if doc.exists else "Macro Indisponível"
             
             inst_auto = """
-            Você é um Algoritmo de Execução de Alta Frequência (HFT). 
-            Sua resposta não deve ter explicações longas. Seja direto, militar e cirúrgico.
+            Você é o Algoritmo Nexus de Alta Frequência (HFT). 
+            Sua resposta deve ser MILITAR, EXTREMAMENTE CURTA E DIRETA. Sem explicações longas.
             
-            REGRAS DE SINAL (CRUZAMENTO OBRIGATÓRIO):
-            1. Só recomende COMPRA se H1 e M30 também estiverem em ALTA, e o M5 tiver RSI < 40 ou Sweep de Baixa.
-            2. Só recomende VENDA se H1 e M30 estiverem em BAIXA, e o M5 tiver RSI > 60 ou Sweep de Alta.
-            3. Se não houver alinhamento claro entre M5, M30 e H1, a ordem é estritamente AGUARDAR.
+            REGRAS DE SINAL:
+            1. Só recomende COMPRA se H1 e M30 estiverem em ALTA, e o M5 tiver RSI baixo ou Sweep.
+            2. Só recomende VENDA se H1 e M30 estiverem em BAIXA, e o M5 tiver RSI alto ou Sweep.
+            3. Se não houver alinhamento H1/M30/M5, a ordem é AGUARDAR.
 
-            FORMATO EXATO DE SAÍDA OBRIGATÓRIO (USE MARKDOWN PARA DESTAQUE):
+            FORMATO OBRIGATÓRIO (NÃO USE TEXTO GRANDE, USE APENAS ### PARA O TÍTULO PRINCIPAL):
             
-            # [🟢 COMPRA / 🔴 VENDA / 🟡 AGUARDAR]
-            **🎯 NOTA DA CONFLUÊNCIA:** [0/10]
-            **⏰ HORÁRIO DA ANÁLISE:** [Use o horário fornecido no prompt]
-            **📌 TEMPO GRÁFICO ALVO:** Operar no gatilho do M5 [A Favor/Contra] da tendência macro de H1.
+            ### [🟢 COMPRA / 🔴 VENDA / 🟡 AGUARDAR]
+            **Nota:** [0/10] | **Horário:** [Horário atual]
+            **Alvo:** [Preço] | **Stop Loss:** [Preço] | **DCA:** [Preço]
             
-            ---
-            **💰 ALVO EXATO:** [Preço de Entrada +/- Cálculo de alvo 1:4]
-            **⛔ STOP LOSS:** [Preço atrás do sweep ou suporte/resistência recente do M5]
-            **🔄 DCA (ZONA DE RECOMPRA):** [Preço de segurança para melhorar preço médio]
-            ---
-            *Nota Tática:* [Apenas 1 frase justificando o motivo do sinal baseado nas tendências cruzadas]
+            *Ação Tática:* [Máximo 15 palavras justificando a ação baseada no cruzamento de tempos]
             """
             
-            prompt_final = f"DADOS HFT:\n{dados_matematicos}\nMACRO:\n{macro_info}\nPERF:\n{perf['texto']}\nHORARIO ATUAL: {hora_atual}"
+            prompt_final = f"DADOS:\n{dados_matematicos}\nMACRO:\n{macro_info}\nPERF:\n{perf['texto']}\nHORARIO ATUAL: {hora_atual}"
             
             try:
                 resposta = groq_client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[{"role": "system", "content": inst_auto}, {"role": "user", "content": prompt_final}],
-                    temperature=0.1, max_tokens=1024
+                    temperature=0.1, max_tokens=256
                 ).choices[0].message.content
                 
                 st.markdown(resposta)
@@ -379,14 +383,15 @@ if auto_mode:
         progress_bar = st.progress(0.0)
         
         for i in range(60, 0, -1):
-            status_text.info(f"⏳ Aguardando fechamento da vela. O robô lerá o mercado novamente em: **{i} segundos**")
+            status_text.info(f"⏳ Aguardando fechamento da vela. Próxima leitura em: **{i} segundos**")
             progress_bar.progress((60 - i) / 60)
             time.sleep(1)
             
         status_text.empty()
         progress_bar.empty()
-        # Comando para recarregar o loop infinito e iniciar nova leitura
-        st.query_params.update(timestamp=str(time.time()))
+        
+        # COMANDO CORRIGIDO: Força o reload oficial da página após o cronômetro zerar
+        st.rerun()
 
 else:
     # --- MODO 2: O MODO ORIGINAL (USUÁRIO MANDA O PRINT) ---
@@ -458,18 +463,20 @@ else:
 
                     instrucao_nexus_manual = """
                     Você é o NEXUS QUANTUM VANGUARD.
-                    FORMATO MILITAR DIRETO:
-                    # [🟢 COMPRA / 🔴 VENDA / 🟡 AGUARDAR]
-                    **🎯 NOTA:** [0/10]
-                    **💰 ALVO:** [Preço] | **⛔ STOP:** [Preço] | **🔄 DCA:** [Preço]
-                    *Nota:* [Frase curta de justificativa cruzando D1/H1/M5]
+                    FORMATO MILITAR DIRETO (NÃO USE TEXTO GIGANTE, USE APENAS ### NO TÍTULO):
+                    
+                    ### [🟢 COMPRA / 🔴 VENDA / 🟡 AGUARDAR]
+                    **Nota:** [0/10]
+                    **Alvo:** [Preço] | **Stop Loss:** [Preço] | **DCA:** [Preço]
+                    
+                    *Justificativa:* [Frase curta cruzando D1/H1/M5]
                     """
                     final_prompt = f"MICRO: {dados_visuais}\nMACRO: {dados_macro_str}\nNEWS: {noticias_hoje}\nPERF: {performance_nexus['texto']}\nCMD: {comando_usuario}"
 
                     resposta_nexus = groq_client.chat.completions.create(
                         model="llama-3.3-70b-versatile",
                         messages=[{"role": "system", "content": instrucao_nexus_manual}, {"role": "user", "content": final_prompt}],
-                        temperature=0.1, max_tokens=1024
+                        temperature=0.1, max_tokens=512
                     ).choices[0].message.content
 
                     st.markdown(f"<div style='color: #00ff88; font-size: 0.8rem; margin-bottom: 15px;'><i>🔬 Processado em <b>{round(time.time() - start_time, 1)}s</b>.</i></div>", unsafe_allow_html=True)
@@ -485,7 +492,7 @@ else:
                     st.error(f"🚨 ALERTA DO SISTEMA: {e}")
                     st.stop()
         
-        st.query_params.update(timestamp=str(time.time()))
+        st.rerun()
 
     elif enviar and not uploaded_files:
         st.warning("⚠️ Comandante, anexe um print da tela para análise.")
@@ -504,11 +511,11 @@ if st.session_state.last_op_id:
             st.toast("✅ Excelente! Parâmetros da vitória arquivados.", icon="🟢")
             st.session_state.last_op_id = None
             time.sleep(2)
-            st.query_params.update(timestamp=str(time.time()))
+            st.rerun()
     with col2:
         if st.button("🔴 DEU LOSS", key="btn_loss"):
             salvar_resultado(st.session_state.last_op_id, st.session_state.last_ativo, "LOSS")
             st.toast("❌ Registro confirmado.", icon="🔴")
             st.session_state.last_op_id = None
             time.sleep(2)
-            st.query_params.update(timestamp=str(time.time()))
+            st.rerun()
