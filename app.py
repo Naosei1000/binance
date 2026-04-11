@@ -423,7 +423,7 @@ components.html(html_grafico, height=450)
 st.markdown("---")
 
 # ==============================================================================
-# 6. O PILOTO AUTOMÁTICO E CHAT MANUAL
+# 6. O PILOTO AUTOMÁTICO E CHAT MANUAL COM INTELIGÊNCIA VANGUARD
 # ==============================================================================
 
 # O HISTÓRICO DE MENSAGENS AGORA FICA AQUI EM CIMA PARA APARECER EM TODOS OS MODOS
@@ -435,12 +435,39 @@ for message in st.session_state.messages:
 
 auto_mode = st.toggle("🟢 ATIVAR PILOTO AUTOMÁTICO (VARREDURA MULTI-TIMEFRAME CONSTANTE)")
 
+# =========================================================
+# O NOVO CÉREBRO INSTITUCIONAL (O RESULTADO DOS 9 VÍDEOS)
+# =========================================================
+INSTRUCAO_NEXUS_VANGUARD = """
+Você é o Algoritmo Nexus Quantum Vanguard, um sistema de Scalping e Smart Money Concepts (SMC).
+Sua missão é dar ordens MASTIGADAS, precisas e seguras.
+
+REGRAS DE OURO (SMC + PRICE ACTION):
+1. [DIREÇÃO]: O Viés Diário (D1) comanda. Se o D1 estiver em Alta, ignore sinais de Venda no M5. Se estiver em Baixa, ignore sinais de Compra.
+2. [VALIDAÇÃO]: Verifique se a tendência tem fundos/topos VÁLIDOS (que romperam a estrutura anterior).
+3. [GATILHO DE ENTRADA]: Só autorize a entrada se o M5 fizer um Liquidity Grab (Pavio falso/Sweep) seguido por um CHoCh (Mudança de Caráter) e deixar um FVG (Espaço Vazio).
+4. [INDUCEMENT]: Se o movimento parecer um falso rompimento perto de um Order Block real, classifique como "Indução" e recomende aguardar.
+5. [LIQUIDEZ]: Mire sempre na liquidez de topos e fundos óbvios (ex: LTBs).
+6. Se todos os critérios não baterem perfeitamente, a ordem é 🟡 FIQUE DE FORA. Não hesite em proteger o capital.
+
+FORMATO OBRIGATÓRIO (PASSO A PASSO PARA INICIANTES):
+
+### [🟢 APERTE COMPRAR (Verde) / 🔴 APERTE VENDER (Vermelho) / 🟡 FIQUE DE FORA]
+**🪙 Ativo:** [Nome da Moeda]
+**⏱️ Tempo Gráfico:** M5 (Velas de 5 minutos)
+**🎯 O Que Fazer Agora:** [Diga exatamente o que fazer. Ex: Vá na corretora e aperte o botão de VENDER]
+**🛑 Quando Fechar (Alvo e Stop):** [Ex: Saia no alvo X onde está a liquidez, ou estope em Y se o mercado virar contra]
+**🛡️ Risco (Gestão de Banca):** Calcule sua aposta para não perder mais de 10% da sua banca se o Stop for atingido.
+
+*Por que entrar?* [Explique em 1 frase simples a lógica institucional da operação]
+"""
+
 if auto_mode:
     # --- MODO 1: O ROBÔ LÊ O MERCADO SOZINHO VIA DADOS (HFT MULTI-TIMEFRAME) ---
     tempo_agora = time.time()
     
     if tempo_agora >= st.session_state.next_auto_run:
-        with st.spinner("📡 SCANNER ATIVADO: Puxando histórico Multi-Timeframe da corretora..."):
+        with st.spinner("📡 SCANNER ATIVADO: Aplicando Inteligência SMC Institucional..."):
             
             ativo_para_ler = "BTC-USD" if "BTC" in ativo_live else "ETH-USD"
             if "EUR" in ativo_live: ativo_para_ler = "EURUSD=X"
@@ -462,36 +489,12 @@ if auto_mode:
                 doc = db.collection("historico_macro").document(f"{ativo_para_ler}_{datetime.now().strftime('%Y-%m-%d')}").get()
                 macro_info = doc.to_dict() if doc.exists else "Macro Indisponível"
                 
-                # =========================================================
-                # ATUALIZAÇÃO 1: PROMPT DO MODO AUTOMÁTICO BEM MASTIGADO
-                # =========================================================
-                inst_auto = """
-                Você é o Algoritmo Nexus.
-                Sua missão é dar o sinal de forma EXTREMAMENTE FÁCIL, MASTIGADA E DIRETA, como se estivesse guiando um iniciante absoluto passo a passo. 
-                Nada de jargões confusos. Diga exatamente onde clicar e quando fechar.
-                
-                REGRAS DE SINAL:
-                1. Só recomende COMPRA se H1 e M30 estiverem em ALTA, e o M5 tiver RSI baixo ou Sweep.
-                2. Só recomende VENDA se H1 e M30 estiverem em BAIXA, e o M5 tiver RSI alto ou Sweep.
-                3. Se não houver alinhamento H1/M30/M5, a ordem é AGUARDAR.
-
-                FORMATO OBRIGATÓRIO (Siga exatamente este formato):
-                
-                ### [🟢 APERTE COMPRAR (Verde) / 🔴 APERTE VENDER (Vermelho) / 🟡 FIQUE DE FORA]
-                **🪙 Moeda/Ativo:** [Nome da Moeda, ex: BTC/USD]
-                **⏱️ Tempo Gráfico:** Coloque no M5 (Velas de 5 minutos)
-                **🎯 O Que Fazer Agora:** [Ex: Vá na sua corretora AGORA e clique no botão de COMPRAR / VENDER]
-                **🛑 Quando Fechar a Operação:** [Ex: Feche a operação manualmente assim que estiver no lucro no Alvo X, ou saia IMEDIATAMENTE se o preço for contra e bater no Stop Loss Y para proteger seu dinheiro.]
-                
-                *Por que entrar?* [Explique em 1 frase muito simples e fácil de entender o porquê da operação]
-                """
-                
                 prompt_final = f"MOEDA: {ativo_para_ler}\nDADOS:\n{dados_matematicos}\nMACRO:\n{macro_info}\nPERF:\n{perf['texto']}\nHORARIO ATUAL: {hora_atual}"
                 
                 try:
                     resposta = groq_client.chat.completions.create(
                         model="llama-3.3-70b-versatile",
-                        messages=[{"role": "system", "content": inst_auto}, {"role": "user", "content": prompt_final}],
+                        messages=[{"role": "system", "content": INSTRUCAO_NEXUS_VANGUARD}, {"role": "user", "content": prompt_final}],
                         temperature=0.1, max_tokens=350
                     ).choices[0].message.content
                     
@@ -556,7 +559,7 @@ else:
         enviar = st.button("ANALISAR")
 
     if enviar and uploaded_files:
-        comando_usuario = prompt if prompt else "Cruze dados Visuais, Sazonalidade, Notícias Institucionais e Multi-Timeframe. Diga o melhor horário de entrada."
+        comando_usuario = prompt if prompt else "Cruze os dados Visuais com os conceitos Smart Money (CHOCh, FVG, Liquidez). Diga o que fazer."
         start_time = time.time()
         
         fuso_br = timezone(timedelta(hours=-3))
@@ -582,7 +585,7 @@ else:
                     instrucao_olhos = """
                     Você é o Analista Visual de Elite do Nexus.
                     REGRA 1: Identifique ATIVO_IDENTIFICADO: [Nome do Ativo].
-                    REGRA 2: Extraia Liquidity Sweeps, Regra dos Terços, Suportes e RSI.
+                    REGRA 2: Extraia Liquidity Sweeps (capturas de liquidez), CHoCh (quebras de estrutura), Order Blocks, e FVG (imbalances).
                     """
                     vision_model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=instrucao_olhos)
                     dados_visuais = vision_model.generate_content(["Faça a varredura visual completa do ativo.", *imagens_pil]).text
@@ -609,29 +612,11 @@ else:
                         dados_macro_str = "Sem dados quantitativos hoje."
                         noticias_hoje = "Sentimento atual cego."
 
-                    # =========================================================
-                    # ATUALIZAÇÃO 2: PROMPT DO MODO MANUAL BEM MASTIGADO
-                    # =========================================================
-                    instrucao_nexus_manual = """
-                    Você é o Algoritmo Nexus.
-                    Sua missão é dar o sinal de forma EXTREMAMENTE FÁCIL, MASTIGADA E DIRETA, como se estivesse guiando um iniciante absoluto passo a passo. 
-                    Nada de jargões confusos. Diga exatamente onde clicar e quando fechar baseando-se na imagem.
-                    
-                    FORMATO OBRIGATÓRIO (Siga exatamente este formato):
-                    
-                    ### [🟢 APERTE COMPRAR (Verde) / 🔴 APERTE VENDER (Vermelho) / 🟡 FIQUE DE FORA]
-                    **🪙 Moeda/Ativo:** [Nome da Moeda lida na imagem]
-                    **⏱️ Tempo Gráfico:** Coloque no M5 (Velas de 5 minutos)
-                    **🎯 O Que Fazer Agora:** [Ex: Vá na sua corretora AGORA e clique no botão de COMPRAR / VENDER]
-                    **🛑 Quando Fechar a Operação:** [Ex: Feche a operação manualmente assim que estiver no lucro no Alvo X, ou saia IMEDIATAMENTE se o preço for contra e bater no Stop Loss Y para proteger seu dinheiro.]
-                    
-                    *Por que entrar?* [Explique em 1 frase muito simples e fácil de entender o porquê da operação baseada na imagem]
-                    """
                     final_prompt = f"MICRO VISUAL: {dados_visuais}\nMACRO: {dados_macro_str}\nNEWS: {noticias_hoje}\nPERF: {performance_nexus['texto']}\nCMD: {comando_usuario}"
 
                     resposta_nexus = groq_client.chat.completions.create(
                         model="llama-3.3-70b-versatile",
-                        messages=[{"role": "system", "content": instrucao_nexus_manual}, {"role": "user", "content": final_prompt}],
+                        messages=[{"role": "system", "content": INSTRUCAO_NEXUS_VANGUARD}, {"role": "user", "content": final_prompt}],
                         temperature=0.1, max_tokens=350
                     ).choices[0].message.content
 
