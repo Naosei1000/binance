@@ -74,6 +74,14 @@ st.markdown("""
     .stProgress > div > div > div > div {
         background-color: #00ff88;
     }
+    
+    .status-box {
+        background-color: rgba(15, 23, 42, 0.8);
+        border-left: 4px solid #00ff88;
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 10px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -112,7 +120,7 @@ except Exception as e:
     st.stop()
 
 # ==============================================================================
-# 3. AUTO-ATUALIZAÇÃO QUÂNTICA (MACRO, SAZONALIDADE 5 ANOS, ATR E NOTÍCIAS)
+# 3. AUTO-ATUALIZAÇÃO QUÂNTICA E FUNÇÕES MELHORADAS (48 VÍDEOS)
 # ==============================================================================
 @st.cache_data(ttl=43200) 
 def atualizar_memoria_nexus_background():
@@ -163,12 +171,34 @@ def atualizar_memoria_nexus_background():
 
 atualizar_memoria_nexus_background()
 
+# NOVO MÓDULO: ANALISADOR DE SESSÕES (LONDRES / NY OVERLAP)
+def verificar_sessao_mercado():
+    hora_est = datetime.now(timezone(timedelta(hours=-5))) # EST Time
+    h = hora_est.hour
+    
+    sessao = "Fora de Horário Nobre"
+    volatilidade = "Baixa"
+    
+    if 19 <= h or h < 3:
+        sessao = "Sessão Asiática (Tóquio/Sydney)"
+        volatilidade = "Baixa/Média (Atenção a Inducements)"
+    elif 3 <= h < 8:
+        sessao = "Sessão de Londres"
+        volatilidade = "Alta"
+    elif 8 <= h < 12:
+        sessao = "🔥 SUPER OVERLAP (Londres + NY)"
+        volatilidade = "MÁXIMA (Melhor Horário SMC)"
+    elif 12 <= h < 17:
+        sessao = "Sessão de Nova York"
+        volatilidade = "Média/Alta"
+        
+    return f"{sessao} | Volatilidade: {volatilidade}"
+
 # ==============================================================================
 # 4. FUNÇÕES DE APRENDIZADO, SEGURANÇA E CRONÔMETRO DIÁRIO
 # ==============================================================================
 
 def exibir_cronometro_cota_diaria(mensagem_erro):
-    """Exibe um cronômetro visual em JavaScript até a meia-noite UTC (Reset de Cota)"""
     agora = datetime.now(timezone.utc)
     amanha = agora + timedelta(days=1)
     meia_noite = datetime(amanha.year, amanha.month, amanha.day, tzinfo=timezone.utc)
@@ -206,7 +236,6 @@ def exibir_cronometro_cota_diaria(mensagem_erro):
 
 def buscar_performance_nexus(ativo):
     try:
-        # Consulta amarrada ao ID do usuário
         docs = db.collection("resultados_nexus").where("ativo", "==", ativo).where("user_id", "==", st.session_state.user_id).order_by("timestamp", direction=firestore.Query.DESCENDING).limit(10).get()
         if not docs: 
             return {"texto": "Sem histórico de operações recente.", "loss_sequence": 0, "wins": 0}
@@ -229,7 +258,7 @@ def salvar_resultado(id_op, ativo, resultado):
     db.collection("resultados_nexus").document(id_op).set({
         "ativo": ativo, 
         "resultado": resultado, 
-        "user_id": st.session_state.user_id, # Registra quem fez a operação
+        "user_id": st.session_state.user_id, 
         "timestamp": firestore.SERVER_TIMESTAMP
     })
 
@@ -276,7 +305,6 @@ def processar_timeframe(df, usa_volume_binance=False):
     h = df['High'].to_numpy()
     l = df['Low'].to_numpy()
 
-    # TRAVA DE SEGURANÇA MATEMÁTICA
     if len(c) < 21:
         preco_atual = float(c[-1]) if len(c) > 0 else 0
         return preco_atual, 50.0, "NEUTRA (Falta de Dados)", "NÃO", "NÃO"
@@ -385,7 +413,7 @@ def ler_dados_mercado_ao_vivo_multi_tf(ticker):
 # ==============================================================================
 # 5.5 HUB DE CORRETORAS E GRÁFICO AO VIVO CENTRAL (SEMPRE VISÍVEL)
 # ==============================================================================
-st.markdown('<div class="nexus-logo">NEXUS <span>QUANTUM</span></div>', unsafe_allow_html=True)
+st.markdown('<div class="nexus-logo">NEXUS <span>QUANTUM 31.0</span></div>', unsafe_allow_html=True)
 
 st.markdown("### 📡 RADAR DE OPERAÇÕES E CORRETORA")
 
@@ -401,6 +429,10 @@ if st.button("SINCRONIZAR DADOS"):
     st.toast(f"Conectando ao terminal {corretora_selecionada}...", icon="⚡")
     time.sleep(1)
     st.success("✅ Conexão Simulada Estabelecida. Gráfico e Scanner prontos para leitura.")
+
+# MOSTRAR SESSÃO ATUAL (INJEÇÃO DA MELHORIA DOS VÍDEOS)
+info_sessao = verificar_sessao_mercado()
+st.markdown(f"<div class='status-box'><b>🌍 Relógio Institucional:</b> {info_sessao}</div>", unsafe_allow_html=True)
 
 simbolo_tv = ativo_live
 html_grafico = f"""
@@ -423,10 +455,54 @@ components.html(html_grafico, height=450)
 st.markdown("---")
 
 # ==============================================================================
+# NOVO MÓDULO: CALCULADORA DE RISCO VARIÁVEL E FIBONACCI 62/88
+# ==============================================================================
+st.markdown("### 🧮 GESTÃO DE RISCO E ALVOS (CASPER SMC & FIBO)")
+with st.expander("Abrir Calculadora Automática de Posição"):
+    col_risk1, col_risk2 = st.columns(2)
+    with col_risk1:
+        st.markdown("**Gestão de Risco Variável (Nexus):**")
+        banca = st.number_input("Tamanho da Banca (USD):", min_value=10.0, value=1000.0, step=100.0)
+        
+        # Lógica Casper SMC
+        perf_temp = buscar_performance_nexus("BTC-USD") # Mock para puxar o ID
+        loss_seq = perf_temp["loss_sequence"]
+        wins = perf_temp["wins"]
+        
+        risco_sugerido = 1.0 # Base
+        if loss_seq > 0:
+            risco_sugerido = 0.5 # Drawdown mode
+            st.warning("Atenção: Você teve perdas recentes. Risco reduzido para 0.5% (Modo Proteção).")
+        elif wins >= 3:
+            risco_sugerido = 2.0 # Scale mode
+            st.success("Sequência vitoriosa! Risco aumentado para 2% (Modo Alavancagem).")
+        else:
+            st.info("Risco Institucional Padrão: 1%.")
+            
+        risco_fin = banca * (risco_sugerido / 100)
+        st.markdown(f"💰 **Risco Máximo por Trade:** ${risco_fin:.2f}")
+
+    with col_risk2:
+        st.markdown("**Calculadora Sniper (Fibo 62/88):**")
+        preco_inicio = st.number_input("Início da Perna (Preço 100%):", format="%.5f")
+        preco_fim = st.number_input("Fim da Perna (Preço 0% - CHoCh):", format="%.5f")
+        
+        if preco_inicio != 0 and preco_fim != 0:
+            diff = preco_inicio - preco_fim
+            entrada_62 = preco_fim + (diff * 0.62)
+            stop_88 = preco_fim + (diff * 0.88)
+            alvo_0 = preco_fim
+            
+            st.markdown(f"🟢 **Entrada Limit (62%):** `{entrada_62:.5f}`")
+            st.markdown(f"🔴 **Stop Loss (88%):** `{stop_88:.5f}`")
+            st.markdown(f"🎯 **Take Profit (0%):** `{alvo_0:.5f}`")
+
+st.markdown("---")
+
+# ==============================================================================
 # 6. O PILOTO AUTOMÁTICO E CHAT MANUAL COM INTELIGÊNCIA VANGUARD
 # ==============================================================================
 
-# O HISTÓRICO DE MENSAGENS AGORA FICA AQUI EM CIMA PARA APARECER EM TODOS OS MODOS
 for message in st.session_state.messages:
     if message["role"] != "system":
         icone_avatar = "🧑‍💻" if message["role"] == "user" else "💠"
@@ -436,30 +512,48 @@ for message in st.session_state.messages:
 auto_mode = st.toggle("🟢 ATIVAR PILOTO AUTOMÁTICO (VARREDURA MULTI-TIMEFRAME CONSTANTE)")
 
 # =========================================================
-# O NOVO CÉREBRO INSTITUCIONAL (O RESULTADO DOS 9 VÍDEOS)
+# O NOVO CÉREBRO INSTITUCIONAL VANGUARD 31.0 (48 VÍDEOS)
 # =========================================================
 INSTRUCAO_NEXUS_VANGUARD = """
-Você é o Algoritmo Nexus Quantum Vanguard, um sistema de Scalping e Smart Money Concepts (SMC).
-Sua missão é dar ordens MASTIGADAS, precisas e seguras.
+Você é o Algoritmo Nexus Quantum Vanguard 31.0, o sistema definitivo de Scalping e Smart Money Concepts (SMC), treinado com as métricas de elite de 48 módulos institucionais.
+Sua missão é dar ordens MASTIGADAS, precisas, seguras e matemáticas.
 
-REGRAS DE OURO (SMC + PRICE ACTION):
-1. [DIREÇÃO]: O Viés Diário (D1) comanda. Se o D1 estiver em Alta, ignore sinais de Venda no M5. Se estiver em Baixa, ignore sinais de Compra.
-2. [VALIDAÇÃO]: Verifique se a tendência tem fundos/topos VÁLIDOS (que romperam a estrutura anterior).
-3. [GATILHO DE ENTRADA]: Só autorize a entrada se o M5 fizer um Liquidity Grab (Pavio falso/Sweep) seguido por um CHoCh (Mudança de Caráter) e deixar um FVG (Espaço Vazio).
-4. [INDUCEMENT]: Se o movimento parecer um falso rompimento perto de um Order Block real, classifique como "Indução" e recomende aguardar.
-5. [LIQUIDEZ]: Mire sempre na liquidez de topos e fundos óbvios (ex: LTBs).
-6. Se todos os critérios não baterem perfeitamente, a ordem é 🟡 FIQUE DE FORA. Não hesite em proteger o capital.
+### REGRAS DE OURO INQUEBRÁVEIS (A SÍNTESE DOS 48 VÍDEOS):
 
-FORMATO OBRIGATÓRIO (PASSO A PASSO PARA INICIANTES):
+1. [DIREÇÃO E ESTRUTURA GLOBAL]: 
+- O Viés Diário (D1) e H4 comandam a fundação do gráfico. Se a fundação for Alta, ignore sinais menores de Venda.
+- Valide fundos e topos APENAS pelo fechamento do corpo da vela (Body Close). Pavios são apenas varreduras.
+- Um fundo só é validado se a perna de alta conseguiu romper o topo anterior.
+
+2. [OS 9 PILARES SMC]: 
+Para um setup nota A+, busque a confluência de: Order Blocks, FVG, Supply/Demand Zones, CHoCh, BOS, Liquidity Pools, Stop Hunts, False Breakouts e Kill Zones (Sessões).
+
+3. [A REGRA DO ORDER BLOCK PURO]: 
+Um Order Block (OB) SÓ É VÁLIDO e operável se existir um Fair Value Gap (FVG) forte e visível imediatamente após ele. Sem FVG, o bloco já foi mitigado. Não entre.
+
+4. [MÓDULO SNIPER: SWEEP + CHOCH]: 
+O melhor gatilho de entrada do mercado é a Captura de Liquidez. Aguarde o preço varrer "Topos/Fundos Nivelados" (Stop Hunt com pavio longo) seguido imediatamente por um CHoCh (Mudança de caráter) no M1/M5 fechando com corpo.
+
+5. [MÓDULO DE EXECUÇÃO FIBONACCI 62/88]:
+Se o setup Sweep+CHoCh for detectado, aconselhe o usuário a traçar a Fibonacci na perna de reversão. A ordem pendente (Limit) deve ficar na retração de 62%, com Stop Loss curtíssimo em 88% e Take Profit no topo/fundo alvo.
+
+6. [MATEMÁTICA DA SOBREVIVÊNCIA (R:R 2.5)]:
+NUNCA autorize uma operação onde a relação Risco/Retorno seja menor que 2.5:1. Se o alvo lógico for curto demais para pagar 2.5x o Stop Loss, aborte a missão (A operação não compensa).
+
+7. [TEMPO, SESSÕES E NOTÍCIAS]:
+- Priorize operações no "Super Overlap" (Londres + Nova York).
+- Seja extremamente cético com rompimentos na Sessão Asiática (volume baixo).
+- Desative operações se detectar NFP ou notícias extremas (Bullish/Bearish fundamental).
+
+FORMATO OBRIGATÓRIO DE RESPOSTA (PASSO A PASSO PARA INICIANTES):
 
 ### [🟢 APERTE COMPRAR (Verde) / 🔴 APERTE VENDER (Vermelho) / 🟡 FIQUE DE FORA]
 **🪙 Ativo:** [Nome da Moeda]
 **⏱️ Tempo Gráfico:** M5 (Velas de 5 minutos)
-**🎯 O Que Fazer Agora:** [Diga exatamente o que fazer. Ex: Vá na corretora e aperte o botão de VENDER]
-**🛑 Quando Fechar (Alvo e Stop):** [Ex: Saia no alvo X onde está a liquidez, ou estope em Y se o mercado virar contra]
-**🛡️ Risco (Gestão de Banca):** Calcule sua aposta para não perder mais de 10% da sua banca se o Stop for atingido.
-
-*Por que entrar?* [Explique em 1 frase simples a lógica institucional da operação]
+**🧠 Leitura Institucional:** [Explique a varredura, o OB/FVG ou a tendência em 2 frases simples]
+**🎯 O Que Fazer Agora:** [Diga exatamente o que fazer. Ex: Vá na corretora e coloque uma ordem de COMPRA LIMIT no preço X (62% da Fibo)]
+**🛑 Quando Fechar (Alvo e Stop):** [Ex: Saia no alvo Y (Liquidez Externa). Estope imediatamente em Z (88%)]
+**🛡️ Risco/Retorno (R:R):** [Mostre que o R:R é superior a 2.5. Relembre a regra de Risco Variável: base 1%]
 """
 
 if auto_mode:
@@ -467,7 +561,7 @@ if auto_mode:
     tempo_agora = time.time()
     
     if tempo_agora >= st.session_state.next_auto_run:
-        with st.spinner("📡 SCANNER ATIVADO: Aplicando Inteligência SMC Institucional..."):
+        with st.spinner("📡 SCANNER ATIVADO: Aplicando Inteligência Vanguard 31.0..."):
             
             ativo_para_ler = "BTC-USD" if "BTC" in ativo_live else "ETH-USD"
             if "EUR" in ativo_live: ativo_para_ler = "EURUSD=X"
@@ -475,6 +569,7 @@ if auto_mode:
             
             fuso_br = timezone(timedelta(hours=-3))
             hora_atual = datetime.now(fuso_br).strftime('%H:%M:%S')
+            sessao_atual_str = verificar_sessao_mercado()
 
             dados_matematicos = ler_dados_mercado_ao_vivo_multi_tf(ativo_para_ler)
             perf = buscar_performance_nexus(ativo_para_ler)
@@ -489,7 +584,7 @@ if auto_mode:
                 doc = db.collection("historico_macro").document(f"{ativo_para_ler}_{datetime.now().strftime('%Y-%m-%d')}").get()
                 macro_info = doc.to_dict() if doc.exists else "Macro Indisponível"
                 
-                prompt_final = f"MOEDA: {ativo_para_ler}\nDADOS:\n{dados_matematicos}\nMACRO:\n{macro_info}\nPERF:\n{perf['texto']}\nHORARIO ATUAL: {hora_atual}"
+                prompt_final = f"MOEDA: {ativo_para_ler}\nDADOS:\n{dados_matematicos}\nSESSÃO DE TRADING: {sessao_atual_str}\nMACRO:\n{macro_info}\nPERF:\n{perf['texto']}\nHORARIO ATUAL: {hora_atual}"
                 
                 try:
                     resposta = groq_client.chat.completions.create(
@@ -498,24 +593,21 @@ if auto_mode:
                         temperature=0.1, max_tokens=350
                     ).choices[0].message.content
                     
-                    # SALVANDO A RESPOSTA NO HISTÓRICO ANTES DE ATUALIZAR A PÁGINA
                     st.session_state.messages.append({"role": "assistant", "content": f"**[🤖 MODO AUTOMÁTICO - {hora_atual}]**\n\n{resposta}"})
                     
                     st.session_state.last_op_id = str(uuid.uuid4())
                     st.session_state.last_ativo = ativo_para_ler
                     
-                    # Define próxima execução
                     st.session_state.next_auto_run = time.time() + 60
                     st.rerun()
                     
                 except Exception as e:
                     erro_str = str(e)
-                    # VERIFICAÇÃO INTELIGENTE DE COTA NO MODO AUTOMÁTICO ORIGINAL
                     if "429" in erro_str or "Quota exceeded" in erro_str:
                         delay_match = re.search(r'retry_delay\s*\{\s*seconds:\s*(\d+)\s*\}', erro_str)
                         wait_seconds = int(delay_match.group(1)) if delay_match else None
                         
-                        if wait_seconds and wait_seconds < 300: # Cota de Minuto
+                        if wait_seconds and wait_seconds < 300: 
                             st.warning(f"⚠️ Limite por minuto da IA atingido. Resfriando por {wait_seconds}s...")
                             cooldown_ph = st.empty()
                             cbar = st.progress(0.0)
@@ -526,14 +618,13 @@ if auto_mode:
                             cooldown_ph.empty()
                             cbar.empty()
                             st.rerun()
-                        else: # Cota Diária
+                        else: 
                             exibir_cronometro_cota_diaria("🚨 COTA DIÁRIA DO PILOTO AUTOMÁTICO ESGOTADA! Você usou todos os créditos para hoje.")
                     else:
                         st.error(f"Erro no Processador Quântico IA: {e}")
                         st.stop()
                         
     else:
-        # LOOP DESBLOQUEADO MANTENDO SUAS MENSAGENS VISUAIS
         st.markdown("---")
         segundos_restantes = int(st.session_state.next_auto_run - tempo_agora)
         progresso = max(0.0, min(1.0, (60 - segundos_restantes) / 60.0))
@@ -559,19 +650,19 @@ else:
         enviar = st.button("ANALISAR")
 
     if enviar and uploaded_files:
-        comando_usuario = prompt if prompt else "Cruze os dados Visuais com os conceitos Smart Money (CHOCh, FVG, Liquidez). Diga o que fazer."
+        comando_usuario = prompt if prompt else "Cruze os dados Visuais com os conceitos Smart Money (CHOCh, FVG, OB, Liquidez Fibo 62/88). Diga o que fazer garantindo R:R 2.5."
         start_time = time.time()
         
         fuso_br = timezone(timedelta(hours=-3))
         agora = datetime.now(fuso_br)
         dias_da_semana = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
         dia_hoje_str = dias_da_semana[agora.weekday()]
+        sessao_atual = verificar_sessao_mercado()
         
-        # OTIMIZAÇÃO APLICADA AQUI: Reduzindo o peso do print para não estourar a cota do Gemini!
         imagens_pil = []
         for f in uploaded_files:
             img = Image.open(f)
-            img.thumbnail((1024, 1024)) # Compressor Quântico: diminui a resolução da imagem enviada
+            img.thumbnail((1024, 1024)) 
             imagens_pil.append(img)
 
         with st.chat_message("user", avatar="🧑‍💻"):
@@ -579,22 +670,22 @@ else:
             st.image(imagens_pil[0], width=200)
 
         with st.chat_message("assistant", avatar="💠"):
-            with st.spinner("NEXUS executando protocolo de Confluência Total..."):
+            with st.spinner("NEXUS executando protocolo de Confluência Total Vanguard 31.0..."):
                 try:
                     st.toast("Escaneando Indicadores Visuais...", icon="👁️")
                     instrucao_olhos = """
                     Você é o Analista Visual de Elite do Nexus.
                     REGRA 1: Identifique ATIVO_IDENTIFICADO: [Nome do Ativo].
-                    REGRA 2: Extraia Liquidity Sweeps (capturas de liquidez), CHoCh (quebras de estrutura), Order Blocks, e FVG (imbalances).
+                    REGRA 2: Extraia Liquidity Sweeps (capturas de liquidez), CHoCh (quebras de estrutura em fechamento), Order Blocks válidos acompanhados de FVG (imbalances).
                     """
                     vision_model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=instrucao_olhos)
-                    dados_visuais = vision_model.generate_content(["Faça a varredura visual completa do ativo.", *imagens_pil]).text
+                    dados_visuais = vision_model.generate_content(["Faça a varredura visual completa do ativo focando em SMC puro.", *imagens_pil]).text
 
                     match = re.search(r'ATIVO_IDENTIFICADO:\s*(.+)', dados_visuais, re.IGNORECASE)
                     ativo_identificado_na_tela = match.group(1).strip() if match else "Desconhecido"
                     ticker_alvo = traduzir_nome_visual_para_ticker(ativo_identificado_na_tela)
                     
-                    st.toast("Carregando Kill Switch...", icon="🧠")
+                    st.toast("Carregando Kill Switch e Gestão de Risco...", icon="🧠")
                     performance_nexus = buscar_performance_nexus(ticker_alvo)
                     
                     if performance_nexus["loss_sequence"] >= 5:
@@ -612,7 +703,7 @@ else:
                         dados_macro_str = "Sem dados quantitativos hoje."
                         noticias_hoje = "Sentimento atual cego."
 
-                    final_prompt = f"MICRO VISUAL: {dados_visuais}\nMACRO: {dados_macro_str}\nNEWS: {noticias_hoje}\nPERF: {performance_nexus['texto']}\nCMD: {comando_usuario}"
+                    final_prompt = f"MICRO VISUAL: {dados_visuais}\nMACRO: {dados_macro_str}\nSESSÃO: {sessao_atual}\nNEWS: {noticias_hoje}\nPERF: {performance_nexus['texto']}\nCMD: {comando_usuario}"
 
                     resposta_nexus = groq_client.chat.completions.create(
                         model="llama-3.3-70b-versatile",
@@ -631,12 +722,11 @@ else:
 
                 except Exception as e:
                     erro_str = str(e)
-                    # VERIFICAÇÃO INTELIGENTE DE COTA NO MODO MANUAL ORIGINAL MANTIDA
                     if "429" in erro_str or "Quota exceeded" in erro_str:
                         delay_match = re.search(r'retry_delay\s*\{\s*seconds:\s*(\d+)\s*\}', erro_str)
                         wait_seconds = int(delay_match.group(1)) if delay_match else None
                         
-                        if wait_seconds and wait_seconds < 300: # Cota de Minuto (Resfriamento curto)
+                        if wait_seconds and wait_seconds < 300: 
                             st.warning(f"⚠️ Limite de imagens por minuto atingido. Ativando protocolo de resfriamento ({wait_seconds}s)...")
                             cooldown_ph = st.empty()
                             cbar = st.progress(0.0)
@@ -647,7 +737,7 @@ else:
                             cooldown_ph.success("✅ Cota recarregada! O sistema tentará processar a imagem novamente no próximo clique.")
                             cbar.empty()
                             st.rerun()
-                        else: # Cota Diária
+                        else: 
                             exibir_cronometro_cota_diaria("🚨 COTA DIÁRIA VISUAL (GEMINI) ESGOTADA! Você usou todos os créditos gratuitos para hoje.")
                     else:
                         st.error(f"🚨 ALERTA DO SISTEMA: {e}")
@@ -676,7 +766,7 @@ if st.session_state.last_op_id:
     with col2:
         if st.button("🔴 DEU LOSS", key="btn_loss"):
             salvar_resultado(st.session_state.last_op_id, st.session_state.last_ativo, "LOSS")
-            st.toast("❌ Registro confirmado.", icon="🔴")
+            st.toast("❌ Registro confirmado. Ajustando risco da próxima.", icon="🔴")
             st.session_state.last_op_id = None
             time.sleep(2)
             st.rerun()
